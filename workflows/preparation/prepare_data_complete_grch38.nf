@@ -16,7 +16,7 @@ include { DOWNLOAD_BAM as DOWNLOAD_PACBIO       } from '../../modules/local/down
 include { DOWNLOAD_BAM as DOWNLOAD_ONT          } from '../../modules/local/download_bam'
 include { DOWNLOAD_REFERENCE                    } from '../../modules/local/download_reference'
 include { GUNZIP                                } from '../../modules/nf-core/gunzip/main'
-include { SAMTOOLS_FAIDX                        } from '../../modules/local/samtools_faidx'
+include { SAMTOOLS_FAIDX                        } from '../../modules/nf-core/samtools/faidx/main'
 include { DOWNLOAD_GIAB_TRUTH_SET_GRCH38        } from '../../modules/local/download_truth_set'
 include { DOWNLOAD_GIAB_TRUTH_SET_GRCH37_LIFTOVER } from '../../modules/local/download_truth_set'
 include { DOWNLOAD_TANDEM_REPEATS_GRCH38        } from '../../modules/local/download_annotations'
@@ -97,7 +97,12 @@ workflow PREPARE_DATA_COMPLETE_GRCH38 {
         GUNZIP(ch_gunzip_ref)
         
         // Index reference
-        SAMTOOLS_FAIDX(GUNZIP.out.gunzip)
+        // nf-core SAMTOOLS_FAIDX requires: tuple [meta, fasta], tuple [meta2, fai], val(get_sizes)
+        SAMTOOLS_FAIDX(
+            GUNZIP.out.gunzip,
+            [[id: 'null'], []],  // Empty fai channel (we're generating it)
+            false                // Don't generate .sizes file
+        )
     }
     
     // =====================================================================
@@ -187,8 +192,8 @@ workflow PREPARE_DATA_COMPLETE_GRCH38 {
     emit:
     // Reference files
     // Extract file from tuple [meta, file]
-    reference_fasta = skip_reference ? Channel.empty() : GUNZIP.out.gunzip.map { meta, file -> file }
-    reference_fai = skip_reference ? Channel.empty() : SAMTOOLS_FAIDX.out.fai.map { meta, file -> file }
+    reference_fasta = skip_reference ? Channel.empty() : GUNZIP.out.gunzip.map { m, file -> file }
+    reference_fai = skip_reference ? Channel.empty() : SAMTOOLS_FAIDX.out.fai.map { m, file -> file }
     
     // BAM files
     illumina_wgs_bam = skip_bams ? Channel.empty() : DOWNLOAD_ILLUMINA_WGS.out.bam

@@ -91,13 +91,13 @@ workflow PREPARE_DATA_COMPLETE_GRCH38 {
         DOWNLOAD_REFERENCE(ch_reference)
         
         // Gunzip reference
-        GUNZIP(
-            DOWNLOAD_REFERENCE.out.file,
-            references_dir
-        )
+        // nf-core GUNZIP requires tuple [val(meta), path(archive)]
+        ch_gunzip_ref = DOWNLOAD_REFERENCE.out.file
+            .map { fasta -> [[id: 'GRCh38'], fasta] }
+        GUNZIP(ch_gunzip_ref)
         
         // Index reference
-        SAMTOOLS_FAIDX(GUNZIP.out.file)
+        SAMTOOLS_FAIDX(GUNZIP.out.gunzip)
     }
     
     // =====================================================================
@@ -186,8 +186,9 @@ workflow PREPARE_DATA_COMPLETE_GRCH38 {
     
     emit:
     // Reference files
-    reference_fasta = skip_reference ? Channel.empty() : GUNZIP.out.file
-    reference_fai = skip_reference ? Channel.empty() : SAMTOOLS_FAIDX.out.fai
+    // Extract file from tuple [meta, file]
+    reference_fasta = skip_reference ? Channel.empty() : GUNZIP.out.gunzip.map { meta, file -> file }
+    reference_fai = skip_reference ? Channel.empty() : SAMTOOLS_FAIDX.out.fai.map { meta, file -> file }
     
     // BAM files
     illumina_wgs_bam = skip_bams ? Channel.empty() : DOWNLOAD_ILLUMINA_WGS.out.bam

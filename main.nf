@@ -29,12 +29,16 @@ log.info """\
 ========================================================================================
 */
 
-include { MANTA as MANTA_WES } from './modules/local/manta'
-include { MANTA as MANTA_WGS } from './modules/local/manta'
-include { CUTESV as CUTESV_PACBIO } from './modules/local/cutesv'
-include { CUTESV as CUTESV_ONT } from './modules/local/cutesv'
-include { PBSV } from './modules/local/pbsv'
-include { SNIFFLES } from './modules/local/sniffles'
+include { MANTA_GERMLINE as MANTA_WES } from './modules/nf-core/manta/germline/main'
+include { MANTA_GERMLINE as MANTA_WGS } from './modules/nf-core/manta/germline/main'
+include { CUTESV as CUTESV_PACBIO } from './modules/nf-core/cutesv/main'
+include { CUTESV as CUTESV_ONT } from './modules/nf-core/cutesv/main'
+include { PBSV_DISCOVER } from './modules/nf-core/pbsv/discover/main'
+include { PBSV_CALL } from './modules/nf-core/pbsv/call/main'
+include { SNIFFLES } from './modules/nf-core/sniffles/main'
+include { BGZIP_TABIX as BGZIP_TABIX_PBSV } from './modules/local/bgzip_tabix'
+include { BGZIP_TABIX as BGZIP_TABIX_CUTESV_PACBIO } from './modules/local/bgzip_tabix'
+include { BGZIP_TABIX as BGZIP_TABIX_CUTESV_ONT } from './modules/local/bgzip_tabix'
 include { TRUVARI_BENCH } from './modules/local/truvari'
 include { PREPARE_GIAB_RESOURCES } from './workflows/prepare_giab_resources'
 include { PREPARE_DATA_COMPLETE_GRCH37 } from './workflows/preparation/prepare_data_complete_grch37'
@@ -156,13 +160,18 @@ workflow {
         ch_illumina_wes_bam = Channel.value([
             [id: 'Illumina_WES', technology: 'Illumina_WES', tool: 'Manta'],
             file(params.illumina_wes_bam),
-            file("${params.illumina_wes_bam}.bai")
+            file("${params.illumina_wes_bam}.bai"),
+            [],  // target_bed
+            []   // target_bed_tbi
         ])
         
+        // nf-core MANTA_GERMLINE requires: tuple [meta, input, index, target_bed, target_bed_tbi], 
+        //                                  tuple [meta2, fasta], tuple [meta3, fai], path(config)
         MANTA_WES(
             ch_illumina_wes_bam,
-            ch_fasta,
-            ch_fasta_fai
+            ch_fasta.map { f -> [[id: 'fasta'], f] },
+            ch_fasta_fai.map { f -> [[id: 'fai'], f] },
+            []  // config file (optional)
         )
     }
     
@@ -171,13 +180,16 @@ workflow {
         ch_illumina_wgs_bam = Channel.value([
             [id: 'Illumina_WGS', technology: 'Illumina_WGS', tool: 'Manta'],
             file(params.illumina_wgs_bam),
-            file("${params.illumina_wgs_bam}.bai")
+            file("${params.illumina_wgs_bam}.bai"),
+            [],  // target_bed
+            []   // target_bed_tbi
         ])
         
         MANTA_WGS(
             ch_illumina_wgs_bam,
-            ch_fasta,
-            ch_fasta_fai
+            ch_fasta.map { f -> [[id: 'fasta'], f] },
+            ch_fasta_fai.map { f -> [[id: 'fai'], f] },
+            []  // config file (optional)
         )
     }
     
@@ -189,22 +201,34 @@ workflow {
             file("${params.pacbio_bam}.bai")
         ])
         
+        // nf-core CUTESV requires: tuple [meta, bam, bai], tuple [meta2, fasta]
         CUTESV_PACBIO(
             ch_pacbio_bam.map { meta, bam, bai -> 
                 [[id: meta.id, technology: meta.technology, tool: 'CuteSV'], bam, bai]
             },
-            ch_fasta,
-            ch_fasta_fai
+            ch_fasta.map { f -> [[id: 'fasta'], f] }
         )
         
-        // PacBio - Pbsv
-        PBSV(
+        // Compress and index CuteSV output
+        BGZIP_TABIX_CUTESV_PACBIO(CUTESV_PACBIO.out.vcf)
+        
+        // PacBio - Pbsv (requires discover + call)
+        // Step 1: Discover SV signatures
+        PBSV_DISCOVER(
             ch_pacbio_bam.map { meta, bam, bai -> 
-                [[id: meta.id, technology: meta.technology, tool: 'Pbsv'], bam, bai]
+                [[id: meta.id, technology: meta.technology, tool: 'Pbsv'], bam]
             },
-            ch_fasta,
-            ch_fasta_fai
+            ch_fasta.map { f -> [[id: 'fasta'], f] }
         )
+        
+        // Step 2: Call SVs from signatures
+        PBSV_CALL(
+            PBSV_DISCOVER.out.svsig,
+            ch_fasta.map { f -> [[id: 'fasta'], f] }
+        )
+        
+        // Compress and index Pbsv output
+        BGZIP_TABIX_PBSV(PBSV_CALL.out.vcf)
     }
     
     // ONT - CuteSV
@@ -215,22 +239,30 @@ workflow {
             file("${params.ont_bam}.bai")
         ])
         
+        // nf-core CUTESV requires: tuple [meta, bam, bai], tuple [meta2, fasta]
         CUTESV_ONT(
             ch_ont_bam.map { meta, bam, bai -> 
                 [[id: meta.id, technology: meta.technology, tool: 'CuteSV'], bam, bai]
             },
-            ch_fasta,
-            ch_fasta_fai
+            ch_fasta.map { f -> [[id: 'fasta'], f] }
         )
         
+        // Compress and index CuteSV output
+        BGZIP_TABIX_CUTESV_ONT(CUTESV_ONT.out.vcf)
+        
         // ONT - Sniffles
+        // nf-core SNIFFLES requires: tuple [meta, bam, bai], tuple [meta2, fasta], 
+        //                            tuple [meta3, tandem_file], vcf_output, snf_output
         SNIFFLES(
             ch_ont_bam.map { meta, bam, bai -> 
                 [[id: meta.id, technology: meta.technology, tool: 'Sniffles'], bam, bai]
             },
-            ch_fasta,
-            ch_fasta_fai,
-            ch_tandem_repeats
+            ch_fasta.map { f -> [[id: 'fasta'], f] },
+            params.tandem_repeats ? 
+                ch_tandem_repeats.map { f -> [[id: 'tandem_repeats'], f] } :
+                Channel.value([[id: 'null'], []]),
+            true,   // vcf_output (output VCF)
+            false   // snf_output (don't output SNF)
         )
     }
     
@@ -242,21 +274,30 @@ workflow {
     ch_all_vcfs = Channel.empty()
     
     if (params.illumina_wes_bam) {
-        ch_all_vcfs = ch_all_vcfs.mix(MANTA_WES.out.vcf)
+        // MANTA_GERMLINE outputs diploid_sv_vcf and diploid_sv_vcf_tbi
+        ch_all_vcfs = ch_all_vcfs.mix(
+            MANTA_WES.out.diploid_sv_vcf
+                .join(MANTA_WES.out.diploid_sv_vcf_tbi)
+        )
     }
     if (params.illumina_wgs_bam) {
-        ch_all_vcfs = ch_all_vcfs.mix(MANTA_WGS.out.vcf)
+        ch_all_vcfs = ch_all_vcfs.mix(
+            MANTA_WGS.out.diploid_sv_vcf
+                .join(MANTA_WGS.out.diploid_sv_vcf_tbi)
+        )
     }
     if (params.pacbio_bam) {
+        // BGZIP_TABIX outputs tuple [meta, vcf, tbi]
         ch_all_vcfs = ch_all_vcfs.mix(
-            CUTESV_PACBIO.out.vcf,
-            PBSV.out.vcf
+            BGZIP_TABIX_CUTESV_PACBIO.out.vcf,
+            BGZIP_TABIX_PBSV.out.vcf
         )
     }
     if (params.ont_bam) {
+        // SNIFFLES outputs vcf and tbi separately
         ch_all_vcfs = ch_all_vcfs.mix(
-            CUTESV_ONT.out.vcf,
-            SNIFFLES.out.vcf
+            BGZIP_TABIX_CUTESV_ONT.out.vcf,
+            SNIFFLES.out.vcf.join(SNIFFLES.out.tbi)
         )
     }
     

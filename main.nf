@@ -129,6 +129,56 @@ workflow {
     }
     
     //
+    // Validate input parameters for SV calling workflow
+    //
+    
+    // Check if running SV calling mode (not just data preparation)
+    def running_sv_calling = !params.prepare_giab_resources && !params.prepare_complete_data
+    
+    // Exit early if no BAMs provided and not in preparation mode
+    if (running_sv_calling && !params.illumina_wes_bam && !params.illumina_wgs_bam && !params.pacbio_bam && !params.ont_bam) {
+        log.error """
+        =====================================================
+        ERROR: No input BAM files specified!
+        
+        Please provide at least one BAM file:
+          --illumina_wes_bam <path>  Illumina WES BAM
+          --illumina_wgs_bam <path>  Illumina WGS BAM
+          --pacbio_bam <path>        PacBio BAM
+          --ont_bam <path>           Oxford Nanopore BAM
+        
+        Or run data preparation mode:
+          --prepare_giab_resources   Prepare minimal GIAB resources
+          --prepare_complete_data    Prepare complete dataset
+        =====================================================
+        """.stripIndent()
+        
+        System.exit(1)
+    }
+    
+    // Log which technologies are being analyzed
+    if (running_sv_calling) {
+        def technologies = []
+        if (params.illumina_wes_bam) technologies << "Illumina WES (Manta)"
+        if (params.illumina_wgs_bam) technologies << "Illumina WGS (Manta)"
+        if (params.pacbio_bam) technologies << "PacBio (CuteSV, PBSV)"
+        if (params.ont_bam) technologies << "ONT (CuteSV, Sniffles)"
+        
+        log.info """
+        =====================================================
+        SV CALLING ANALYSIS
+        
+        Technologies to analyze:
+        ${technologies.collect { "  ✓ ${it}" }.join('\n')}
+        
+        ${!params.illumina_wes_bam && !params.illumina_wgs_bam ? '  ✗ Illumina (no BAM provided - skipping)' : ''}
+        ${!params.pacbio_bam ? '  ✗ PacBio (no BAM provided - skipping)' : ''}
+        ${!params.ont_bam ? '  ✗ ONT (no BAM provided - skipping)' : ''}
+        =====================================================
+        """.stripIndent()
+    }
+    
+    //
     // Create input channels
     //
     

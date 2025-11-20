@@ -1,0 +1,38 @@
+# Nextflow temporary files
+.nextflow/
+.nextflow.log*
+work/
+results/
+benchmarking_run/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# R
+.Rhistory
+.RData
+.Rproj.user
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data files (large files should not be committed)
+*.bam
+*.bam.bai
+*.vcf.gz
+*.vcf.gz.tbi
+*.fa
+*.fa.fai
+*.sif

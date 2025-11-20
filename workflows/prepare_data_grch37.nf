@@ -139,26 +139,33 @@ workflow PREPARE_DATA_GRCH37 {
     //
     
     // Intersect exome+UTR with truth set
+    // nf-core BEDTOOLS_INTERSECT takes two inputs:
+    // 1. tuple val(meta), path(intervals1), path(intervals2)
+    // 2. tuple val(meta2), path(chrom_sizes) - empty for BED files
+    ch_exome_intersect = DOWNLOAD_GIAB_TRUTH_SET.out.bed
+        .combine(CREATE_EXOME_UTR_BED.out.bed)
+        .map { bed1, bed2 -> 
+            [[id: 'exome_utr_HG002_SVs_Tier1'], bed1, bed2]
+        }
+    
     BEDTOOLS_INTERSECT_EXOME(
-        Channel.value([
-            [id: 'exome_utr_HG002_SVs_Tier1'],
-            DOWNLOAD_GIAB_TRUTH_SET.out.bed,
-            CREATE_EXOME_UTR_BED.out.bed,
-            []  // No chromosome sizes needed
-        ])
+        ch_exome_intersect,
+        [[id: 'null'], []]  // Empty chrom_sizes channel
     )
     
     // Intersect Paediatric disorders with truth set
     // Note: Assuming Paediatric_disorders.bed is provided separately
     ch_paediatric_bed = Channel.value(file("${references_dir}/Paediatric_disorders.bed"))
     
+    ch_panel_intersect = DOWNLOAD_GIAB_TRUTH_SET.out.bed
+        .combine(ch_paediatric_bed)
+        .map { bed1, bed2 -> 
+            [[id: 'paediatric_disorders_HG002_SVs_Tier1'], bed1, bed2]
+        }
+    
     BEDTOOLS_INTERSECT_PANEL(
-        Channel.value([
-            [id: 'paediatric_disorders_HG002_SVs_Tier1'],
-            DOWNLOAD_GIAB_TRUTH_SET.out.bed,
-            ch_paediatric_bed,
-            []
-        ])
+        ch_panel_intersect,
+        [[id: 'null'], []]  // Empty chrom_sizes channel
     )
     
     emit:
@@ -166,8 +173,8 @@ workflow PREPARE_DATA_GRCH37 {
     fai = SAMTOOLS_FAIDX.out.fai
     truth_vcf = DOWNLOAD_GIAB_TRUTH_SET.out.vcf
     truth_bed = DOWNLOAD_GIAB_TRUTH_SET.out.bed
-    exome_utr_targets = BEDTOOLS_INTERSECT_EXOME.out.bed
-    gene_panel_targets = BEDTOOLS_INTERSECT_PANEL.out.bed
+    exome_utr_targets = BEDTOOLS_INTERSECT_EXOME.out.intersect
+    gene_panel_targets = BEDTOOLS_INTERSECT_PANEL.out.intersect
     tandem_repeats = DOWNLOAD_TANDEM_REPEATS.out.bed
     illumina_wes_bam = DOWNLOAD_ILLUMINA_WES_BAM.out.bam
     illumina_wgs_bam = DOWNLOAD_ILLUMINA_WGS_BAM.out.bam

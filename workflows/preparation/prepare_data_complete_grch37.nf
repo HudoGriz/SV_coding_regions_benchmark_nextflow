@@ -18,15 +18,15 @@ include { DOWNLOAD_BAM as DOWNLOAD_ILLUMINA_WGS } from '../../modules/local/down
 include { DOWNLOAD_BAM as DOWNLOAD_PACBIO       } from '../../modules/local/download_bam'
 include { DOWNLOAD_BAM as DOWNLOAD_ONT          } from '../../modules/local/download_bam'
 include { DOWNLOAD_REFERENCE                    } from '../../modules/local/download_reference'
-include { GUNZIP                                } from '../../modules/local/gunzip'
+include { GUNZIP                                } from '../../modules/nf-core/gunzip/main'
 include { SAMTOOLS_FAIDX                        } from '../../modules/local/samtools_faidx'
 include { TABIX_VCF                             } from '../../modules/local/tabix_vcf'
 include { DOWNLOAD_GIAB_TRUTH_SET               } from '../../modules/local/download_truth_set'
 include { DOWNLOAD_TANDEM_REPEATS               } from '../../modules/local/download_annotations'
 include { DOWNLOAD_GENCODE_GTF                  } from '../../modules/local/download_annotations'
 include { CREATE_EXOME_UTR_BED                  } from '../../modules/local/create_target_beds'
-include { BEDTOOLS_INTERSECT as INTERSECT_EXOME } from '../../modules/local/bedtools_intersect'
-include { BEDTOOLS_INTERSECT as INTERSECT_PANEL } from '../../modules/local/bedtools_intersect'
+include { BEDTOOLS_INTERSECT as INTERSECT_EXOME } from '../../modules/nf-core/bedtools/intersect/main'
+include { BEDTOOLS_INTERSECT as INTERSECT_PANEL } from '../../modules/nf-core/bedtools/intersect/main'
 
 workflow PREPARE_DATA_COMPLETE_GRCH37 {
     
@@ -125,13 +125,13 @@ workflow PREPARE_DATA_COMPLETE_GRCH37 {
         DOWNLOAD_REFERENCE(ch_reference)
         
         // Gunzip reference
-        GUNZIP(
-            DOWNLOAD_REFERENCE.out.file,
-            references_dir
-        )
+        // nf-core GUNZIP requires tuple [val(meta), path(archive)]
+        ch_gunzip_ref = DOWNLOAD_REFERENCE.out.file
+            .map { fasta -> [[id: 'hs37d5'], fasta] }
+        GUNZIP(ch_gunzip_ref)
         
         // Index reference
-        SAMTOOLS_FAIDX(GUNZIP.out.file)
+        SAMTOOLS_FAIDX(GUNZIP.out.gunzip)
     }
     
     // =====================================================================
@@ -186,7 +186,11 @@ workflow PREPARE_DATA_COMPLETE_GRCH37 {
             ]
         }
     
-    INTERSECT_EXOME(ch_intersect_exome)
+    // nf-core BEDTOOLS_INTERSECT requires chrom_sizes input (empty for BED files)
+    INTERSECT_EXOME(
+        ch_intersect_exome,
+        [[id: 'null'], []]  // Empty chrom_sizes channel
+    )
     
     // Intersect Paediatric_disorders with GIAB truth set (if exists)
     if (params.paediatric_disorders_bed) {
@@ -203,13 +207,17 @@ workflow PREPARE_DATA_COMPLETE_GRCH37 {
                 ]
             }
         
-        INTERSECT_PANEL(ch_intersect_panel)
+        INTERSECT_PANEL(
+            ch_intersect_panel,
+            [[id: 'null'], []]  // Empty chrom_sizes channel
+        )
     }
     
     emit:
     // Reference files
-    reference_fasta = skip_reference ? Channel.empty() : GUNZIP.out.file
-    reference_fai = skip_reference ? Channel.empty() : SAMTOOLS_FAIDX.out.fai
+    // Extract file from tuple [meta, file]
+    reference_fasta = skip_reference ? Channel.empty() : GUNZIP.out.gunzip.map { meta, file -> file }
+    reference_fai = skip_reference ? Channel.empty() : SAMTOOLS_FAIDX.out.fai.map { meta, file -> file }
     
     // BAM files
     illumina_wes_bam = skip_bams ? Channel.empty() : DOWNLOAD_ILLUMINA_WES.out.bam
@@ -227,6 +235,6 @@ workflow PREPARE_DATA_COMPLETE_GRCH37 {
     
     // Target BEDs
     exome_utr_bed = CREATE_EXOME_UTR_BED.out.bed
-    exome_utr_intersect = INTERSECT_EXOME.out.bed
-    paediatric_intersect = params.paediatric_disorders_bed ? INTERSECT_PANEL.out.bed : Channel.empty()
+    exome_utr_intersect = INTERSECT_EXOME.out.intersect
+    paediatric_intersect = params.paediatric_disorders_bed ? INTERSECT_PANEL.out.intersect : Channel.empty()
 }

@@ -15,15 +15,15 @@ include { DOWNLOAD_BAM as DOWNLOAD_ILLUMINA_WGS } from '../../modules/local/down
 include { DOWNLOAD_BAM as DOWNLOAD_PACBIO       } from '../../modules/local/download_bam'
 include { DOWNLOAD_BAM as DOWNLOAD_ONT          } from '../../modules/local/download_bam'
 include { DOWNLOAD_REFERENCE                    } from '../../modules/local/download_reference'
-include { GUNZIP                                } from '../../modules/local/gunzip'
+include { GUNZIP                                } from '../../modules/nf-core/gunzip/main'
 include { SAMTOOLS_FAIDX                        } from '../../modules/local/samtools_faidx'
 include { DOWNLOAD_GIAB_TRUTH_SET_GRCH38        } from '../../modules/local/download_truth_set'
 include { DOWNLOAD_GIAB_TRUTH_SET_GRCH37_LIFTOVER } from '../../modules/local/download_truth_set'
 include { DOWNLOAD_TANDEM_REPEATS_GRCH38        } from '../../modules/local/download_annotations'
 include { DOWNLOAD_GENCODE_GTF_GRCH38           } from '../../modules/local/download_annotations'
 include { CREATE_EXOME_UTR_BED                  } from '../../modules/local/create_target_beds'
-include { BEDTOOLS_INTERSECT as INTERSECT_EXOME } from '../../modules/local/bedtools_intersect'
-include { BEDTOOLS_INTERSECT as INTERSECT_PANEL } from '../../modules/local/bedtools_intersect'
+include { BEDTOOLS_INTERSECT as INTERSECT_EXOME } from '../../modules/nf-core/bedtools/intersect/main'
+include { BEDTOOLS_INTERSECT as INTERSECT_PANEL } from '../../modules/nf-core/bedtools/intersect/main'
 
 workflow PREPARE_DATA_COMPLETE_GRCH38 {
     
@@ -157,7 +157,11 @@ workflow PREPARE_DATA_COMPLETE_GRCH38 {
             ]
         }
     
-    INTERSECT_EXOME(ch_intersect_exome)
+    // nf-core BEDTOOLS_INTERSECT requires chrom_sizes input (empty for BED files)
+    INTERSECT_EXOME(
+        ch_intersect_exome,
+        [[id: 'null'], []]  // Empty chrom_sizes channel
+    )
     
     // Intersect Paediatric_disorders with GIAB GRCh38 benchmark regions (if exists)
     if (params.paediatric_disorders_bed_grch38) {
@@ -174,7 +178,10 @@ workflow PREPARE_DATA_COMPLETE_GRCH38 {
                 ]
             }
         
-        INTERSECT_PANEL(ch_intersect_panel)
+        INTERSECT_PANEL(
+            ch_intersect_panel,
+            [[id: 'null'], []]  // Empty chrom_sizes channel
+        )
     }
     
     emit:
@@ -199,6 +206,6 @@ workflow PREPARE_DATA_COMPLETE_GRCH38 {
     
     // Target BEDs
     exome_utr_bed = CREATE_EXOME_UTR_BED.out.bed
-    exome_utr_intersect = INTERSECT_EXOME.out.bed
-    paediatric_intersect = params.paediatric_disorders_bed_grch38 ? INTERSECT_PANEL.out.bed : Channel.empty()
+    exome_utr_intersect = INTERSECT_EXOME.out.intersect
+    paediatric_intersect = params.paediatric_disorders_bed_grch38 ? INTERSECT_PANEL.out.intersect : Channel.empty()
 }

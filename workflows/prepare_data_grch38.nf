@@ -133,25 +133,32 @@ workflow PREPARE_DATA_GRCH38 {
     //
     
     // Intersect exome+UTR with GRCh38 truth set
+    // nf-core BEDTOOLS_INTERSECT takes two inputs:
+    // 1. tuple val(meta), path(intervals1), path(intervals2)
+    // 2. tuple val(meta2), path(chrom_sizes) - empty for BED files
+    ch_exome_intersect = DOWNLOAD_GIAB_TRUTH_SET_GRCH38.out.bed
+        .combine(CREATE_EXOME_UTR_BED.out.bed)
+        .map { bed1, bed2 -> 
+            [[id: 'exome_utr_GRCh38_HG002_T2TQ100'], bed1, bed2]
+        }
+    
     BEDTOOLS_INTERSECT_EXOME(
-        Channel.value([
-            [id: 'exome_utr_GRCh38_HG002_T2TQ100'],
-            DOWNLOAD_GIAB_TRUTH_SET_GRCH38.out.bed,
-            CREATE_EXOME_UTR_BED.out.bed,
-            []
-        ])
+        ch_exome_intersect,
+        [[id: 'null'], []]  // Empty chrom_sizes channel
     )
     
     // Intersect Paediatric disorders with GRCh38 truth set
     ch_paediatric_bed = Channel.value(file("${references_dir}/Paediatric_disorders_GRCh38.bed"))
     
+    ch_panel_intersect = DOWNLOAD_GIAB_TRUTH_SET_GRCH38.out.bed
+        .combine(ch_paediatric_bed)
+        .map { bed1, bed2 -> 
+            [[id: 'paediatric_disorders_GRCh38_HG002_T2TQ100'], bed1, bed2]
+        }
+    
     BEDTOOLS_INTERSECT_PANEL(
-        Channel.value([
-            [id: 'paediatric_disorders_GRCh38_HG002_T2TQ100'],
-            DOWNLOAD_GIAB_TRUTH_SET_GRCH38.out.bed,
-            ch_paediatric_bed,
-            []
-        ])
+        ch_panel_intersect,
+        [[id: 'null'], []]  // Empty chrom_sizes channel
     )
     
     emit:
@@ -161,8 +168,8 @@ workflow PREPARE_DATA_GRCH38 {
     truth_bed_grch38 = DOWNLOAD_GIAB_TRUTH_SET_GRCH38.out.bed
     truth_vcf_grch37 = DOWNLOAD_GIAB_TRUTH_SET_GRCH37_LIFTOVER.out.vcf
     truth_bed_grch37 = DOWNLOAD_GIAB_TRUTH_SET_GRCH37_LIFTOVER.out.bed
-    exome_utr_targets = BEDTOOLS_INTERSECT_EXOME.out.bed
-    gene_panel_targets = BEDTOOLS_INTERSECT_PANEL.out.bed
+    exome_utr_targets = BEDTOOLS_INTERSECT_EXOME.out.intersect
+    gene_panel_targets = BEDTOOLS_INTERSECT_PANEL.out.intersect
     tandem_repeats = DOWNLOAD_TANDEM_REPEATS_GRCH38.out.bed
     illumina_wgs_bam = DOWNLOAD_ILLUMINA_WGS_BAM_GRCH38.out.bam
     pacbio_bam = DOWNLOAD_PACBIO_BAM_GRCH38.out.bam

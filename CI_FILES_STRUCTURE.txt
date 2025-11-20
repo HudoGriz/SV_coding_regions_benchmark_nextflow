@@ -1,0 +1,200 @@
+CI/CD Testing Infrastructure - File Structure
+==============================================
+
+New Files Added:
+├── .github/
+│   ├── workflows/
+│   │   └── ci.yml                    [Main GitHub Actions workflow]
+│   └── README_TESTING.md             [GitHub Actions usage guide]
+│
+├── docs/
+│   └── TESTING.md                     [Comprehensive testing documentation]
+│
+├── test_local.sh                      [Local testing script - executable]
+├── CI_SETUP_SUMMARY.md                [Quick reference guide]
+├── BADGE.md                           [Status badge snippets]
+└── CI_FILES_STRUCTURE.txt            [This file]
+
+Modified Files:
+└── nextflow.config                    [Added 'test' profile]
+
+
+File Descriptions:
+==================
+
+1. .github/workflows/ci.yml (~200 lines)
+   - GitHub Actions workflow configuration
+   - Runs on push/PR to master, main, dev
+   - Two jobs: test (5-7 min), lint (1-2 min)
+   - Creates synthetic test data
+   - Validates workflow in stub mode
+   - Uploads artifacts
+
+2. .github/README_TESTING.md (~186 lines)
+   - GitHub Actions specific documentation
+   - How to view/interpret CI results
+   - Customization options
+   - Troubleshooting CI issues
+
+3. docs/TESTING.md (~400 lines)
+   - Complete testing guide
+   - Local testing procedures
+   - Test data specifications
+   - Troubleshooting common issues
+   - Best practices & advanced topics
+
+4. test_local.sh (~133 lines)
+   - Automated local testing script
+   - Creates all synthetic test data
+   - Runs pipeline in stub mode
+   - Provides cleanup instructions
+   - Usage: ./test_local.sh
+
+5. CI_SETUP_SUMMARY.md (~406 lines)
+   - Quick start guide
+   - What was added and why
+   - Immediate action steps
+   - Future enhancement ideas
+
+6. BADGE.md (~72 lines)
+   - Copy-paste badge snippets
+   - Multiple badge options
+   - Example README sections
+
+7. nextflow.config (modified)
+   - Added 'test' profile
+   - Minimal resources for CI
+   - Docker-based execution
+   - Process overrides for testing
+
+
+Quick Start Commands:
+====================
+
+1. Test Locally:
+   $ ./test_local.sh
+
+2. View Files:
+   $ ls -la .github/workflows/
+   $ cat docs/TESTING.md
+
+3. Commit & Push:
+   $ git add .github/ docs/TESTING.md test_local.sh nextflow.config
+   $ git add CI_SETUP_SUMMARY.md BADGE.md
+   $ git commit -m "Add GitHub Actions CI/CD testing infrastructure"
+   $ git push origin master
+
+4. Watch CI Run:
+   Go to: https://github.com/HudoGriz/SV_coding_regions_benchmark_nextflow/actions
+
+
+Test Data Created by CI:
+========================
+
+test_data/
+├── reference.fa              [1 MB synthetic chr22]
+├── reference.fa.fai          [FASTA index]
+├── test_sorted.bam           [20 aligned reads]
+├── test_sorted.bam.bai       [BAM index]
+├── truth.vcf.gz              [5 synthetic SVs]
+├── truth.vcf.gz.tbi          [VCF index]
+├── high_confidence.bed       [Full chr22 region]
+├── gene_panel.bed            [4 gene regions]
+└── wes_utr.bed               [5 WES/UTR regions]
+
+Total size: ~1 MB (fast CI execution)
+
+
+What Gets Tested:
+================
+
+✅ Nextflow DSL2 syntax validation
+✅ Configuration file syntax
+✅ Profile definitions
+✅ Process connections and logic
+✅ Channel operations
+✅ Workflow instantiation
+✅ Stub execution (no tool execution)
+✅ Parameter handling
+
+❌ NOT tested (yet):
+   - Actual tool execution
+   - Output file correctness  
+   - Real data processing
+   - Performance metrics
+
+
+CI Workflow Behavior:
+====================
+
+Triggers:
+- Push to master/main/dev branches
+- Pull requests to these branches
+- Manual workflow dispatch
+
+Duration:
+- Lint job: 1-2 minutes
+- Test job: 3-5 minutes
+- Total: ~5-7 minutes
+
+Artifacts (7 day retention):
+- test-results/
+- .nextflow.log
+
+Cost:
+- FREE for public repositories
+
+
+Profiles Available:
+==================
+
+$ nextflow run main.nf -profile <profile>
+
+- test              [New! For CI/CD testing]
+- singularity       [Singularity containers]
+- local             [Local executor]
+- slurm             [SLURM cluster]
+- standard          [Default]
+- giab_grch37       [GIAB GRCh37 prep]
+- giab_grch38       [GIAB GRCh38 prep]
+- complete_grch37   [Complete GRCh37 prep]
+- complete_grch38   [Complete GRCh38 prep]
+
+
+Documentation Index:
+===================
+
+For Testing:
+1. CI_SETUP_SUMMARY.md     [Start here - quick overview]
+2. docs/TESTING.md          [Detailed testing guide]
+3. .github/README_TESTING.md [GitHub Actions details]
+4. BADGE.md                 [Status badges]
+
+For Usage:
+- README.md                 [Main pipeline documentation]
+- example_run.sh            [Example execution]
+- params.yaml               [Example parameters]
+
+
+Support:
+========
+
+Issues? Check these in order:
+1. Run ./test_local.sh
+2. Read docs/TESTING.md troubleshooting section
+3. Check CI logs in GitHub Actions
+4. Review .nextflow.log locally
+5. Open GitHub issue with details
+
+
+Next Steps:
+===========
+
+1. ✅ Review CI_SETUP_SUMMARY.md
+2. ✅ Run: ./test_local.sh
+3. ✅ Commit new files
+4. ✅ Push to GitHub
+5. ✅ Watch Actions tab
+6. ✅ Add status badge to README
+7. ⭐ Star the repository!
+

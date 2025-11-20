@@ -1,0 +1,185 @@
+GIAB Resources Preparation Workflow - Visual Flow
+==================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          USER INITIATES WORKFLOW                             │
+│                                                                              │
+│   nextflow run main.nf -profile giab_grch37                                 │
+│                     OR                                                       │
+│   nextflow run main.nf -profile giab_grch38                                 │
+└──────────────────────────────┬──────────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       PREPARE_GIAB_RESOURCES WORKFLOW                        │
+│                                                                              │
+│  ┌──────────────────────────────────────────────────────────────┐          │
+│  │  Genome Detection: params.genome                              │          │
+│  │  Options: 'hs37d5' or 'GRCh38'                                │          │
+│  └────────────────┬─────────────────────┬───────────────────────┘          │
+│                   │                     │                                   │
+│         [GRCh37/hs37d5]          [GRCh38]                                   │
+│                   │                     │                                   │
+│                   ▼                     ▼                                   │
+│  ┌────────────────────────┐   ┌────────────────────────┐                  │
+│  │  GRCh37 Path            │   │  GRCh38 Path            │                  │
+│  └────────────────────────┘   └────────────────────────┘                  │
+└──────┬──────────────────────────────┬─────────────────────────────┬────────┘
+       │                              │                             │
+       ▼                              ▼                             ▼
+┌──────────────────────┐   ┌──────────────────────┐   ┌──────────────────────┐
+│  DOWNLOAD PROCESSES   │   │  DOWNLOAD PROCESSES   │   │  DOWNLOAD PROCESSES   │
+│                       │   │                       │   │                       │
+│  GRCh37:              │   │  GRCh38:              │   │  Common:              │
+│  • Truth Set v0.6     │   │  • Truth Set T2TQ100  │   │  • Tandem Repeats     │
+│  • hs37d5 TRF         │   │  • GRCh38 TRF         │   │  • GENCODE GTF        │
+│  • GENCODE v19        │   │  • GENCODE v49        │   │                       │
+└──────────┬────────────┘   └──────────┬────────────┘   └───────────┬──────────┘
+           │                           │                            │
+           └───────────────────────────┴────────────────────────────┘
+                                       │
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       DOWNLOAD TRUTH SET PROCESS                             │
+│                                                                              │
+│  GRCh37:  DOWNLOAD_GIAB_TRUTH_SET                                           │
+│  • Downloads: HG002_SVs_Tier1_v0.6.vcf.gz                                   │
+│  • Downloads: HG002_SVs_Tier1_v0.6.bed                                      │
+│  • Indexes VCF with tabix                                                   │
+│                                                                              │
+│  GRCh38:  DOWNLOAD_GIAB_TRUTH_SET_GRCH38                                    │
+│  • Downloads: GRCh38_HG002-T2TQ100-V1.0_stvar.vcf.gz (pre-indexed)          │
+│  • Downloads: GRCh38_HG002-T2TQ100-V1.0_stvar.vcf.gz.tbi                    │
+│  • Downloads: GRCh38_HG002-T2TQ100-V1.0_stvar.benchmark.bed                 │
+└──────────────────────────────┬──────────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    DOWNLOAD ANNOTATIONS PROCESSES                            │
+│                                                                              │
+│  Tandem Repeats:                                                            │
+│  GRCh37:  DOWNLOAD_TANDEM_REPEATS → human_hs37d5.trf.bed                   │
+│  GRCh38:  DOWNLOAD_TANDEM_REPEATS_GRCH38 → human_GRCh38...trf.bed          │
+│                                                                              │
+│  Gene Annotations:                                                          │
+│  GRCh37:  DOWNLOAD_GENCODE_GTF → gencode.v19.annotation.gtf.gz             │
+│  GRCh38:  DOWNLOAD_GENCODE_GTF_GRCH38 → gencode.v49.annotation.gtf.gz      │
+└──────────────────────────────┬──────────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      CREATE TARGET BED PROCESS                               │
+│                                                                              │
+│  CREATE_EXOME_UTR_BED                                                       │
+│  • Input: GENCODE GTF (v19 or v49)                                          │
+│  • Container: R with rtracklayer, GenomicFeatures                           │
+│  • Output: Exome + UTR target BED file                                      │
+│    - GRCh37: exome_utr_gtf.bed                                              │
+│    - GRCh38: exome_utr_gtf_GRCh38.bed                                       │
+└──────────────────────────────┬──────────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           PUBLISH OUTPUTS                                    │
+│                                                                              │
+│  ${params.project_dir}/data/HG002_references/                               │
+│  ├── Truth VCF + index                                                      │
+│  ├── High-confidence regions BED                                            │
+│  └── Tandem repeats BED                                                     │
+│                                                                              │
+│  ${params.project_dir}/data/references/                                     │
+│  ├── GENCODE GTF                                                            │
+│  └── Exome+UTR target BED                                                   │
+└──────────────────────────────┬──────────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                             WORKFLOW COMPLETE                                │
+│                                                                              │
+│  Outputs:                                                                   │
+│  • giab_vcf (tuple: meta, vcf, tbi)                                         │
+│  • giab_bed (high-confidence regions)                                       │
+│  • tandem_repeats (BED)                                                     │
+│  • gencode_gtf (GTF.gz)                                                     │
+│  • exome_utr_bed (BED)                                                      │
+│                                                                              │
+│  Status: ✅ Resources ready for SV calling and benchmarking                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+DETAILED PROCESS FLOW
+=====================
+
+1. USER INPUT
+   ↓
+   params.genome = 'hs37d5' OR 'GRCh38'
+   
+2. WORKFLOW INITIALIZATION
+   ↓
+   • Create metadata: [id: 'HG002']
+   • Define output directories
+   • Determine URLs based on genome
+
+3. PARALLEL DOWNLOADS
+   ↓
+   ┌─────────────────┬─────────────────┬─────────────────┐
+   │ Truth Sets      │ Tandem Repeats   │ Gene Annotations│
+   └─────────────────┴─────────────────┴─────────────────┘
+          ↓                   ↓                   ↓
+   All downloads have 3 retry attempts on failure
+
+4. BED FILE GENERATION
+   ↓
+   GTF → R script → Exome+UTR BED
+   
+5. PUBLICATION
+   ↓
+   Files copied to publishDir (outside work/)
+
+6. EMIT CHANNELS
+   ↓
+   Outputs available for downstream processes
+
+
+RESOURCE REQUIREMENTS
+=====================
+
+Process              | CPUs | Memory | Time
+---------------------|------|--------|-------
+DOWNLOAD_*           | 1    | 2 GB   | 2 h
+CREATE_EXOME_UTR_BED | 1    | 8 GB   | 1 h
+
+
+ERROR HANDLING
+==============
+
+Network Failures
+↓
+Retry up to 3 times
+↓
+If still fails → Error reported
+
+
+DATA SOURCES
+============
+
+GIAB Truth Sets:
+  ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/
+
+Tandem Repeats:
+  github.com/hall-lab/speedseq/master/annotations/
+
+GENCODE:
+  ftp.ebi.ac.uk/pub/databases/gencode/
+
+
+OUTPUT SIZES
+============
+
+GRCh37:
+  • Total: ~50 MB compressed, ~500 MB uncompressed
+  • Runtime: 5-15 minutes
+
+GRCh38:
+  • Total: ~75 MB compressed, ~800 MB uncompressed
+  • Runtime: 10-20 minutes

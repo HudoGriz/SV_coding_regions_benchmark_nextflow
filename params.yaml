@@ -1,0 +1,48 @@
+# Example parameter file for SV calling pipeline
+# Usage: nextflow run main.nf -params-file params.yaml
+
+# Pipeline run name
+run_name: 'benchmarking_run'
+
+# Output directory (will be created relative to launch directory)
+outdir: 'results'
+
+# Reference genome
+fasta: '/path/to/data/references/human_hs37d5.fasta'
+
+# Input BAM files (comment out technologies you don't want to run)
+illumina_wes_bam: '/path/to/data/Illumina_wes/bam/151002_7001448_0359_AC7F6GANXX_Sample_HG002-EEogPU_v02-KIT-Av5_AGATGTAC_L008.posiSrt.markDup.bam'
+illumina_wgs_bam: '/path/to/data/Illumina_wgs/bam/HG002.hs37d5.60x.1.bam'
+pacbio_bam: '/path/to/data/Pacbio/bam/HG002_PacBio-HiFi-Revio_20231031_48x_GRCh37.bam'
+ont_bam: '/path/to/data/ONT/bam/HG002_GRCh37_ONT-UL_UCSC_20200508.phased.bam'
+
+# Benchmarking VCF (truth set)
+benchmark_vcf: '/path/to/data/references/HG002_SVs_Tier1_v0.6.vcf.gz'
+
+# Target BED files for benchmarking
+high_confidence_targets: '/path/to/data/references/HG002_SVs_Tier1_v0.6.bed'
+gene_panel_targets: '/path/to/data/references/Paediatric_disorders.HG002_SVs_Tier1.bed'
+wes_utr_targets: '/path/to/data/references/exome_utr_gtf.HG002_SVs_Tier1.bed'
+
+# Optional: Tandem repeats BED file (for Sniffles)
+tandem_repeats: '/path/to/data/references/human_hs37d5.trf.bed'
+
+# Truvari benchmarking parameters (WGS/PacBio/ONT)
+truvari_refdist: 500
+truvari_pctsize: 0.7
+truvari_pctovl: 0
+truvari_pctseq: 0
+
+# Truvari benchmarking parameters (WES-specific)
+truvari_wes_refdist: 500
+truvari_wes_pctsize: 0.7
+truvari_wes_pctovl: 0
+truvari_wes_pctseq: 0
+
+# Resource limits
+max_cpus: 24
+max_memory: '128.GB'
+max_time: '48.h'
+
+# Singularity container directory
+singularity_image_dir: './singularity_images'

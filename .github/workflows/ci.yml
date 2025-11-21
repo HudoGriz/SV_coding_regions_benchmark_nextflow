@@ -168,7 +168,6 @@ jobs:
             -profile test_nfcore,docker \
             --outdir test_results \
             -resume
-        continue-on-error: true
 
       - name: Check outputs
         if: always()

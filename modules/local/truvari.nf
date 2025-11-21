@@ -34,7 +34,6 @@ process TRUVARI_BENCH {
         -o truvari_output \\
         --dup-to-ins \\
         --passonly \\
-        --bench-overlaps \\
         --refdist ${refdist} \\
         --pctsize ${pctsize} \\
         --pctovl ${pctovl} \\

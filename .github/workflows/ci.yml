@@ -105,8 +105,9 @@ jobs:
             echo "❌ Module loading errors detected"
             exit 1
           fi
-          if grep -i "ERROR" module_test.log | grep -v "Please provide"; then
-            echo "❌ Unexpected errors detected"
+          # Only check for actual Nextflow ERROR lines (not parameter names or descriptions)
+          if grep "^ERROR" module_test.log; then
+            echo "❌ Nextflow errors detected"
             exit 1
           fi
           echo "✅ All modules load successfully"

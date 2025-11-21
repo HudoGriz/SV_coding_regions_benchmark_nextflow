@@ -29,6 +29,7 @@ log.info """\
 ========================================================================================
 */
 
+include { SAMTOOLS_FAIDX } from './modules/nf-core/samtools/faidx/main'
 include { MANTA_GERMLINE as MANTA_WES } from './modules/nf-core/manta/germline/main'
 include { MANTA_GERMLINE as MANTA_WGS } from './modules/nf-core/manta/germline/main'
 include { CUTESV as CUTESV_PACBIO } from './modules/nf-core/cutesv/main'
@@ -187,13 +188,27 @@ workflow {
     def is_remote = params.fasta.startsWith('http://') || params.fasta.startsWith('https://') || params.fasta.startsWith('ftp://')
     ch_fasta = Channel.value(file(params.fasta, checkIfExists: !is_remote))
     
-    // FAI index - may not exist for remote files, will be created if needed
+    // FAI index - create if needed for remote files or if doesn't exist locally
     def fai_path = "${params.fasta}.fai"
-    ch_fasta_fai = is_remote ? Channel.empty() : Channel.value(file(fai_path, checkIfExists: false))
+    def fai_file = file(fai_path)
     
-    // Target BED files for benchmarking
-    ch_benchmark_vcf = Channel.value(file(params.benchmark_vcf, checkIfExists: true))
-    ch_benchmark_vcf_tbi = Channel.value(file("${params.benchmark_vcf}.tbi", checkIfExists: true))
+    if (is_remote || !fai_file.exists()) {
+        // Create FAI index using samtools faidx
+        SAMTOOLS_FAIDX(
+            ch_fasta.map { f -> [[id: 'reference'], f] },
+            [[],[]],  // No existing fai provided, will be created
+            false     // get_sizes parameter
+        )
+        ch_fasta_fai = SAMTOOLS_FAIDX.out.fai.map { meta, fai -> fai }
+    } else {
+        ch_fasta_fai = Channel.value(fai_file)
+    }
+    
+    // Benchmark VCF and index
+    // For remote files, Nextflow will download them automatically
+    def is_vcf_remote = params.benchmark_vcf.startsWith('http://') || params.benchmark_vcf.startsWith('https://') || params.benchmark_vcf.startsWith('ftp://')
+    ch_benchmark_vcf = Channel.value(file(params.benchmark_vcf, checkIfExists: !is_vcf_remote))
+    ch_benchmark_vcf_tbi = Channel.value(file("${params.benchmark_vcf}.tbi", checkIfExists: !is_vcf_remote))
     
     ch_targets = Channel.from([
         ['high_confidence', file(params.high_confidence_targets, checkIfExists: true)],
@@ -212,10 +227,11 @@ workflow {
     
     // Illumina WES
     if (params.illumina_wes_bam) {
+        def is_wes_remote = params.illumina_wes_bam.startsWith('http://') || params.illumina_wes_bam.startsWith('https://')
         ch_illumina_wes_bam = Channel.value([
             [id: 'Illumina_WES', technology: 'Illumina_WES', tool: 'Manta'],
-            file(params.illumina_wes_bam),
-            file("${params.illumina_wes_bam}.bai"),
+            file(params.illumina_wes_bam, checkIfExists: !is_wes_remote),
+            file("${params.illumina_wes_bam}.bai", checkIfExists: !is_wes_remote),
             [],  // target_bed
             []   // target_bed_tbi
         ])
@@ -232,10 +248,11 @@ workflow {
     
     // Illumina WGS
     if (params.illumina_wgs_bam) {
+        def is_wgs_remote = params.illumina_wgs_bam.startsWith('http://') || params.illumina_wgs_bam.startsWith('https://')
         ch_illumina_wgs_bam = Channel.value([
             [id: 'Illumina_WGS', technology: 'Illumina_WGS', tool: 'Manta'],
-            file(params.illumina_wgs_bam),
-            file("${params.illumina_wgs_bam}.bai"),
+            file(params.illumina_wgs_bam, checkIfExists: !is_wgs_remote),
+            file("${params.illumina_wgs_bam}.bai", checkIfExists: !is_wgs_remote),
             [],  // target_bed
             []   // target_bed_tbi
         ])

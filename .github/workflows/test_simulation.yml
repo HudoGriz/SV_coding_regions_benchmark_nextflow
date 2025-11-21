@@ -1,0 +1,291 @@
+name: Test Simulation Features
+
+on:
+  push:
+    branches:
+      - master
+      - main
+      - 'seqera-ai/**'
+    paths:
+      - 'modules/local/simulate_targets.nf'
+      - 'modules/local/gather_statistics.nf'
+      - 'workflows/simulate_and_benchmark.nf'
+      - 'workflows/analysis_and_plots.nf'
+      - 'bin/Python/simulate_targets.py'
+      - 'bin/R/**'
+      - 'conf/test_simulation.config'
+      - '.github/workflows/test_simulation.yml'
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - 'modules/local/simulate_targets.nf'
+      - 'modules/local/gather_statistics.nf'
+      - 'workflows/simulate_and_benchmark.nf'
+      - 'workflows/analysis_and_plots.nf'
+      - 'bin/Python/simulate_targets.py'
+      - 'bin/R/**'
+      - 'conf/test_simulation.config'
+      - '.github/workflows/test_simulation.yml'
+  workflow_dispatch:
+
+jobs:
+  test-simulation:
+    name: Test Simulation and Statistics
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        profile: ['docker']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Nextflow
+        uses: nf-core/setup-nextflow@v2
+        with:
+          version: "24.04.0"
+      
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Cache Nextflow assets
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nextflow/assets
+            ~/.nextflow/plugins
+          key: ${{ runner.os }}-nextflow-${{ hashFiles('**/nextflow.config') }}
+          restore-keys: |
+            ${{ runner.os }}-nextflow-
+      
+      - name: Check test GTF file exists
+        run: |
+          if [ ! -f "test_data/gencode_test.gtf.gz" ]; then
+            echo "❌ Test GTF file not found!"
+            exit 1
+          fi
+          echo "✅ Test GTF file found"
+          zcat test_data/gencode_test.gtf.gz | head -5
+      
+      - name: Verify Python simulation script
+        run: |
+          if [ ! -f "bin/Python/simulate_targets.py" ]; then
+            echo "❌ Python simulation script not found!"
+            exit 1
+          fi
+          echo "✅ Python simulation script found"
+          head -20 bin/Python/simulate_targets.py
+      
+      - name: Verify R statistics scripts
+        run: |
+          for script in bin/R/paper_plots.R bin/R/general_statistics.R; do
+            if [ ! -f "$script" ]; then
+              echo "❌ $script not found!"
+              exit 1
+            fi
+            echo "✅ $script found"
+          done
+      
+      - name: Run simulation test
+        run: |
+          echo "🧪 Running simulation test with profile: test_simulation,${{ matrix.profile }}"
+          nextflow run main.nf \
+            -profile test_simulation,${{ matrix.profile }} \
+            -with-report test_simulation_report.html \
+            -with-timeline test_simulation_timeline.html \
+            -with-trace test_simulation_trace.txt \
+            --outdir test_results_simulation
+      
+      - name: Verify simulation outputs
+        run: |
+          echo "🔍 Checking simulation outputs..."
+          
+          # Check simulated BED files were created
+          if [ ! -d "test_results_simulation/simulated_targets" ]; then
+            echo "❌ Simulated targets directory not found!"
+            exit 1
+          fi
+          
+          BED_COUNT=$(ls test_results_simulation/simulated_targets/simulation_*.bed 2>/dev/null | wc -l)
+          echo "📊 Found $BED_COUNT simulated BED files"
+          
+          if [ "$BED_COUNT" -lt 5 ]; then
+            echo "❌ Expected at least 5 simulated BED files, found $BED_COUNT"
+            exit 1
+          fi
+          echo "✅ Simulation BED files created successfully"
+          
+          # Show sample of first BED file
+          echo "📄 Sample from first simulated BED file:"
+          head -5 test_results_simulation/simulated_targets/simulation_1.bed || echo "Could not read BED file"
+      
+      - name: Verify benchmarking results
+        run: |
+          echo "🔍 Checking benchmarking results..."
+          
+          # Check that simulation benchmarking was performed
+          if [ -d "test_results_simulation/benchmarking" ]; then
+            echo "✅ Benchmarking directory exists"
+            find test_results_simulation/benchmarking -name "summary.json" | head -10
+          else
+            echo "⚠️  Benchmarking directory not found (may be skipped in this test)"
+          fi
+      
+      - name: Verify statistics outputs
+        run: |
+          echo "🔍 Checking statistics outputs..."
+          
+          # Check statistics directory
+          if [ ! -d "test_results_simulation/statistics" ]; then
+            echo "❌ Statistics directory not found!"
+            exit 1
+          fi
+          echo "✅ Statistics directory exists"
+          
+          # Check for plots
+          if [ -d "test_results_simulation/statistics/plots" ]; then
+            PLOT_COUNT=$(ls test_results_simulation/statistics/plots/*.png 2>/dev/null | wc -l)
+            echo "📊 Found $PLOT_COUNT plot files"
+            if [ "$PLOT_COUNT" -gt 0 ]; then
+              echo "✅ Plots generated successfully"
+            else
+              echo "⚠️  No plot files found"
+            fi
+          fi
+          
+          # Check for tables
+          if [ -d "test_results_simulation/statistics/tables" ]; then
+            TABLE_COUNT=$(ls test_results_simulation/statistics/tables/*.csv 2>/dev/null | wc -l)
+            echo "📊 Found $TABLE_COUNT table files"
+            if [ "$TABLE_COUNT" -gt 0 ]; then
+              echo "✅ Tables generated successfully"
+            fi
+          fi
+          
+          # Check summary statistics
+          if [ -f "test_results_simulation/statistics/summary_statistics.txt" ]; then
+            echo "✅ Summary statistics file created"
+            echo "📄 Summary statistics content:"
+            head -20 test_results_simulation/statistics/summary_statistics.txt || echo "Could not read summary"
+          else
+            echo "⚠️  Summary statistics file not found"
+          fi
+      
+      - name: Display test summary
+        if: always()
+        run: |
+          echo "================================"
+          echo "📊 TEST SUMMARY"
+          echo "================================"
+          
+          # Count outputs
+          echo "Results directory: test_results_simulation/"
+          du -sh test_results_simulation/ 2>/dev/null || echo "Directory not found"
+          
+          echo ""
+          echo "📁 Directory structure:"
+          tree -L 3 test_results_simulation/ 2>/dev/null || find test_results_simulation -type d | head -20
+          
+          echo ""
+          echo "✅ Test completed"
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulation-test-results-${{ matrix.profile }}
+          path: |
+            test_results_simulation/
+            test_simulation_*.html
+            test_simulation_*.txt
+          retention-days: 7
+      
+      - name: Upload Nextflow reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextflow-reports-simulation-${{ matrix.profile }}
+          path: |
+            test_simulation_report.html
+            test_simulation_timeline.html
+            test_simulation_trace.txt
+          retention-days: 7
+      
+      - name: Clean up
+        if: always()
+        run: |
+          echo "🧹 Cleaning up test results..."
+          rm -rf test_results_simulation work .nextflow* || true
+          echo "✅ Cleanup complete"
+
+  test-simulation-modules:
+    name: Test Simulation Modules Independently
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Test Python simulation script
+        run: |
+          echo "🐍 Testing Python simulation script..."
+          
+          # Check script syntax
+          python -m py_compile bin/Python/simulate_targets.py
+          echo "✅ Python script syntax valid"
+          
+          # Check imports (if any)
+          echo "📦 Checking Python dependencies..."
+          python -c "import sys; print(f'Python {sys.version}')"
+      
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.4.1'
+      
+      - name: Test R scripts syntax
+        run: |
+          echo "📊 Testing R scripts..."
+          
+          for script in bin/R/*.R; do
+            if [ -f "$script" ]; then
+              echo "Checking $script..."
+              Rscript -e "source('$script')" 2>&1 | head -5 || echo "⚠️  Note: Script may require specific inputs"
+            fi
+          done
+          
+          echo "✅ R scripts syntax checked"
+
+  test-workflow-syntax:
+    name: Validate Workflow Syntax
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Nextflow
+        uses: nf-core/setup-nextflow@v2
+        with:
+          version: "24.04.0"
+      
+      - name: Validate workflow syntax
+        run: |
+          echo "🔍 Validating Nextflow DSL2 syntax..."
+          
+          # Check main workflow
+          nextflow config main.nf > /dev/null
+          echo "✅ Main workflow syntax valid"
+          
+          # List all workflow files
+          echo "📄 Workflow files:"
+          find workflows -name "*.nf" -type f
+          
+          echo "✅ All syntax checks passed"

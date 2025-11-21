@@ -73,9 +73,9 @@ jobs:
 
       - name: Run pipeline with test_nfcore profile (stub)
         run: |
-          nextflow run . \\
-            -profile test_nfcore,docker \\
-            -stub-run \\
+          nextflow run . \
+            -profile test_nfcore,docker \
+            -stub-run \
             --outdir test_results_${{ matrix.nextflow-version }}
 
       - name: Upload test results

@@ -118,7 +118,7 @@ jobs:
     needs: lint
     strategy:
       matrix:
-        profile: ['test', 'test_nfcore', 'test_pacbio', 'test_ont']
+        profile: ['test', 'test_nfcore']
     steps:
       - name: Check out pipeline code
         uses: actions/checkout@v4
@@ -172,9 +172,29 @@ jobs:
       - name: Check outputs
         if: always()
         run: |
-          echo "Checking for output files..."
+          echo "Checking for output files from all SV callers..."
+          echo ""
+          echo "=== Illumina (Manta) ==="
+          find test_results -type f -name "*Manta*.vcf.gz" || echo "No Manta VCF files found"
+          echo ""
+          echo "=== PacBio (CuteSV) ==="
+          find test_results -type f -path "*/PacBio/*CuteSV*.vcf.gz" || echo "No PacBio CuteSV VCF files found"
+          echo ""
+          echo "=== PacBio (PBSV) ==="
+          find test_results -type f -path "*/PacBio/*Pbsv*.vcf.gz" || echo "No PBSV VCF files found"
+          echo ""
+          echo "=== ONT (CuteSV) ==="
+          find test_results -type f -path "*/ONT/*CuteSV*.vcf.gz" || echo "No ONT CuteSV VCF files found"
+          echo ""
+          echo "=== ONT (Sniffles) ==="
+          find test_results -type f -path "*/ONT/*Sniffles*.vcf.gz" || echo "No Sniffles VCF files found"
+          echo ""
+          echo "=== All VCF outputs ==="
           find test_results -type f -name "*.vcf.gz" || echo "No VCF files found"
-          find test_results -type f || echo "No output files found"
+          echo ""
+          echo "=== Summary ==="
+          echo "Total VCF files: $(find test_results -type f -name "*.vcf.gz" 2>/dev/null | wc -l)"
+          echo "Total VCF index files: $(find test_results -type f -name "*.vcf.gz.tbi" 2>/dev/null | wc -l)"
 
       - name: Upload pipeline outputs
         if: always()
@@ -183,106 +203,6 @@ jobs:
           name: test-results
           path: |
             test_results/
-            .nextflow.log
-            .nextflow/
-          retention-days: 7
-
-  test-pacbio:
-    name: Test PacBio SV Callers
-    runs-on: ubuntu-latest
-    needs: [lint, module-check, profile-check]
-    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    steps:
-      - name: Check out pipeline code
-        uses: actions/checkout@v4
-
-      - name: Install Nextflow
-        uses: nf-core/setup-nextflow@v2
-        with:
-          version: "latest-stable"
-
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v3
-
-      - name: Run pipeline with PacBio test profile
-        run: |
-          echo "Testing PacBio SV callers (CuteSV and PBSV)..."
-          nextflow run . \
-            -profile test_pacbio,docker \
-            --outdir test_results_pacbio \
-            -resume
-
-      - name: Check PacBio outputs
-        if: always()
-        run: |
-          echo "Checking for PacBio SV caller outputs..."
-          echo ""
-          echo "=== Checking for CuteSV output ==="
-          find test_results_pacbio -type f -name "*CuteSV*.vcf*" || echo "No CuteSV VCF files found"
-          echo ""
-          echo "=== Checking for PBSV output ==="
-          find test_results_pacbio -type f -name "*Pbsv*.vcf*" || echo "No PBSV VCF files found"
-          echo ""
-          echo "=== All output files ==="
-          find test_results_pacbio -type f || echo "No output files found"
-
-      - name: Upload PacBio test outputs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-pacbio
-          path: |
-            test_results_pacbio/
-            .nextflow.log
-            .nextflow/
-          retention-days: 7
-
-  test-ont:
-    name: Test ONT SV Callers
-    runs-on: ubuntu-latest
-    needs: [lint, module-check, profile-check]
-    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    steps:
-      - name: Check out pipeline code
-        uses: actions/checkout@v4
-
-      - name: Install Nextflow
-        uses: nf-core/setup-nextflow@v2
-        with:
-          version: "latest-stable"
-
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v3
-
-      - name: Run pipeline with ONT test profile
-        run: |
-          echo "Testing ONT SV callers (CuteSV and Sniffles)..."
-          nextflow run . \
-            -profile test_ont,docker \
-            --outdir test_results_ont \
-            -resume
-
-      - name: Check ONT outputs
-        if: always()
-        run: |
-          echo "Checking for ONT SV caller outputs..."
-          echo ""
-          echo "=== Checking for CuteSV output ==="
-          find test_results_ont -type f -name "*CuteSV*.vcf*" || echo "No CuteSV VCF files found"
-          echo ""
-          echo "=== Checking for Sniffles output ==="
-          find test_results_ont -type f -name "*Sniffles*.vcf*" || echo "No Sniffles VCF files found"
-          echo ""
-          echo "=== All output files ==="
-          find test_results_ont -type f || echo "No output files found"
-
-      - name: Upload ONT test outputs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-ont
-          path: |
-            test_results_ont/
             .nextflow.log
             .nextflow/
           retention-days: 7

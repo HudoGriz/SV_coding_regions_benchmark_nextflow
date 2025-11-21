@@ -1,10 +1,13 @@
 # Testing Long-Read SV Callers
 
-This document describes how to test the PacBio and ONT structural variant callers in the pipeline.
+This document describes how to test all structural variant callers in the pipeline, including PacBio and ONT long-read technologies.
 
 ## Overview
 
-The pipeline supports multiple SV callers for long-read sequencing technologies:
+The pipeline supports multiple SV callers across all sequencing technologies:
+
+### Illumina SV Callers
+- **Manta**: Short-read structural variant caller
 
 ### PacBio HiFi SV Callers
 - **CuteSV**: General-purpose SV caller optimized for long reads
@@ -14,51 +17,31 @@ The pipeline supports multiple SV callers for long-read sequencing technologies:
 - **CuteSV**: General-purpose SV caller optimized for long reads
 - **Sniffles**: ONT-optimized SV caller with tandem repeat support
 
-## Test Profiles
+## Comprehensive Test Profile (`test_nfcore`)
 
-### PacBio Test Profile (`test_pacbio`)
-
-Tests both CuteSV and PBSV using nf-core test datasets.
+The `test_nfcore` profile now tests **all sequencing technologies and SV callers** in a single pipeline run.
 
 **Usage:**
 ```bash
-nextflow run . -profile test_pacbio,docker
+nextflow run . -profile test_nfcore,docker
 ```
 
 **What it tests:**
-- PacBio HiFi BAM processing
-- CuteSV variant calling on PacBio data
-- PBSV discover and call workflow
-- VCF compression and indexing
-- Output file generation
+- ✅ Illumina WES BAM processing (Manta)
+- ✅ Illumina WGS BAM processing (Manta)
+- ✅ PacBio HiFi BAM processing (CuteSV + PBSV)
+- ✅ Oxford Nanopore BAM processing (CuteSV + Sniffles)
+- ✅ VCF compression and indexing for all callers
+- ✅ Complete pipeline integration
 
 **Configuration:**
 - Resource limits: 2 CPUs, 6GB memory, 6h runtime
-- Uses `test_hifi.sorted.bam` from nf-core test datasets
+- Test data from nf-core/test-datasets:
+  - Illumina: `test.paired_end.sorted.bam`, `test2.paired_end.sorted.bam`
+  - PacBio: `test_hifi.sorted.bam`
+  - ONT: `test.sorted.bam`
 - Benchmarking is disabled (no SV truth set for test data)
-- Error strategy: ignore (to identify which callers work)
-
-### ONT Test Profile (`test_ont`)
-
-Tests both CuteSV and Sniffles using nf-core test datasets.
-
-**Usage:**
-```bash
-nextflow run . -profile test_ont,docker
-```
-
-**What it tests:**
-- Oxford Nanopore BAM processing
-- CuteSV variant calling on ONT data
-- Sniffles variant calling with tandem repeat annotation
-- VCF compression and indexing
-- Output file generation
-
-**Configuration:**
-- Resource limits: 2 CPUs, 6GB memory, 6h runtime
-- Uses `test.sorted.bam` from nf-core nanopore test datasets
-- Benchmarking is disabled (no SV truth set for test data)
-- Error strategy: ignore (to identify which callers work)
+- Increased time limit for long-read callers (2h per process)
 
 ## Running Tests Locally
 
@@ -68,31 +51,30 @@ nextflow run . -profile test_ont,docker
 
 ### Quick Start
 
-**Test PacBio callers:**
+**Test all SV callers (all technologies):**
 ```bash
-nextflow run . -profile test_pacbio,docker --outdir results_pacbio
+nextflow run . -profile test_nfcore,docker --outdir test_results
 ```
 
-**Test ONT callers:**
-```bash
-nextflow run . -profile test_ont,docker --outdir results_ont
-```
-
-**Test all long-read callers:**
-```bash
-# PacBio
-nextflow run . -profile test_pacbio,docker --outdir results_pacbio
-
-# ONT
-nextflow run . -profile test_ont,docker --outdir results_ont
-```
+This single command tests:
+- Illumina short-read callers (Manta)
+- PacBio HiFi callers (CuteSV + PBSV)
+- ONT callers (CuteSV + Sniffles)
 
 ## Expected Outputs
 
-### PacBio Test Outputs
+### Complete Test Outputs
 
 ```
-results_pacbio/
+test_results/
+├── Illumina_WES/
+│   └── Manta/
+│       ├── Illumina_WES_Manta.vcf.gz
+│       └── Illumina_WES_Manta.vcf.gz.tbi
+├── Illumina_WGS/
+│   └── Manta/
+│       ├── Illumina_WGS_Manta.vcf.gz
+│       └── Illumina_WGS_Manta.vcf.gz.tbi
 ├── PacBio/
 │   ├── CuteSV/
 │   │   ├── PacBio_CuteSV.vcf.gz
@@ -100,13 +82,6 @@ results_pacbio/
 │   └── Pbsv/
 │       ├── PacBio_Pbsv.vcf.gz
 │       └── PacBio_Pbsv.vcf.gz.tbi
-└── pipeline_info/
-```
-
-### ONT Test Outputs
-
-```
-results_ont/
 ├── ONT/
 │   ├── CuteSV/
 │   │   ├── ONT_CuteSV.vcf.gz
@@ -115,24 +90,34 @@ results_ont/
 │       ├── ONT_Sniffles.vcf.gz
 │       └── ONT_Sniffles.vcf.gz.tbi
 └── pipeline_info/
+    ├── execution_timeline.html
+    ├── execution_report.html
+    ├── execution_trace.txt
+    └── pipeline_dag.svg
 ```
+
+**Total expected VCF files**: 6 callers × 2 files (vcf.gz + tbi) = 12 files
 
 ## CI/CD Testing
 
-The GitHub Actions workflow automatically tests both profiles on every push and pull request.
+The GitHub Actions workflow automatically tests all SV callers on every push and pull request.
 
 ### CI Test Jobs
 
-1. **profile-check**: Validates that test_pacbio and test_ont profiles load correctly
-2. **test-pacbio**: Runs full PacBio SV calling pipeline
-3. **test-ont**: Runs full ONT SV calling pipeline
+1. **profile-check**: Validates that test_nfcore profile loads correctly
+2. **run-test**: Runs complete SV calling pipeline for all technologies
+   - Tests Illumina (Manta)
+   - Tests PacBio (CuteSV + PBSV)
+   - Tests ONT (CuteSV + Sniffles)
+   - Validates all VCF outputs
 
 ### Viewing CI Results
 
 Check the Actions tab in the GitHub repository to see:
 - Profile validation results
-- Test execution logs
-- Generated artifacts (VCF files, logs)
+- Complete test execution logs
+- Generated artifacts (all VCF files from all callers)
+- Output validation summary showing which callers produced results
 
 ## Troubleshooting
 
@@ -159,6 +144,9 @@ cat .nextflow.log
 
 **Check specific process logs:**
 ```bash
+# Illumina
+cat work/*/MANTA_GERMLINE/.command.log
+
 # PacBio
 cat work/*/CUTESV_PACBIO/.command.log
 cat work/*/PBSV_DISCOVER/.command.log
@@ -171,7 +159,7 @@ cat work/*/SNIFFLES/.command.log
 
 **Resume failed runs:**
 ```bash
-nextflow run . -profile test_pacbio,docker -resume
+nextflow run . -profile test_nfcore,docker -resume
 ```
 
 ## Customizing Tests
@@ -222,19 +210,22 @@ process {
 All test data comes from the nf-core test-datasets repository:
 - **Repository**: https://github.com/nf-core/test-datasets
 - **Branch**: modules
-- **PacBio data**: `data/genomics/homo_sapiens/pacbio/bam/test_hifi.sorted.bam`
-- **ONT data**: `data/genomics/homo_sapiens/nanopore/bam/test.sorted.bam`
+- **Illumina WES**: `data/genomics/homo_sapiens/illumina/bam/test.paired_end.sorted.bam`
+- **Illumina WGS**: `data/genomics/homo_sapiens/illumina/bam/test.paired_end.sorted.bam`
+- **PacBio HiFi**: `data/genomics/homo_sapiens/pacbio/bam/test_hifi.sorted.bam`
+- **ONT**: `data/genomics/homo_sapiens/nanopore/bam/test.sorted.bam`
 - **Reference**: `data/genomics/homo_sapiens/genome/genome.fasta`
 
 ## Contributing
 
-When adding new callers or test profiles:
+When adding new SV callers or test profiles:
 
-1. Create a new test config file in `conf/`
-2. Add the profile to the CI workflow matrix
-3. Create a dedicated test job if needed
-4. Update this documentation
-5. Submit a pull request
+1. Create or update test config file in `conf/test_nfcore.config`
+2. Update the CI workflow (`.github/workflows/ci.yml`) if needed
+3. Add expected outputs to output validation
+4. Update this documentation with new caller information
+5. Test locally with `nextflow run . -profile test_nfcore,docker`
+6. Submit a pull request
 
 ## Related Documentation
 

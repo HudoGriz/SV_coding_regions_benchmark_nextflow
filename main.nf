@@ -258,11 +258,16 @@ workflow {
         ch_fasta_fai = Channel.value(fai_file)
     }
     
-    // Benchmark VCF and index
+    // Benchmark VCF and index (optional for testing)
     // For remote files, Nextflow will download them automatically
-    def is_vcf_remote = params.benchmark_vcf.startsWith('http://') || params.benchmark_vcf.startsWith('https://') || params.benchmark_vcf.startsWith('ftp://')
-    ch_benchmark_vcf = Channel.value(file(params.benchmark_vcf, checkIfExists: !is_vcf_remote))
-    ch_benchmark_vcf_tbi = Channel.value(file("${params.benchmark_vcf}.tbi", checkIfExists: !is_vcf_remote))
+    if (params.benchmark_vcf && !params.skip_benchmarking) {
+        def is_vcf_remote = params.benchmark_vcf.startsWith('http://') || params.benchmark_vcf.startsWith('https://') || params.benchmark_vcf.startsWith('ftp://')
+        ch_benchmark_vcf = Channel.value(file(params.benchmark_vcf, checkIfExists: !is_vcf_remote))
+        ch_benchmark_vcf_tbi = Channel.value(file("${params.benchmark_vcf}.tbi", checkIfExists: !is_vcf_remote))
+    } else {
+        ch_benchmark_vcf = Channel.empty()
+        ch_benchmark_vcf_tbi = Channel.empty()
+    }
     
     // Target BED files - check if remote
     def is_targets_remote = params.high_confidence_targets.startsWith('http://') || params.high_confidence_targets.startsWith('https://') || params.high_confidence_targets.startsWith('ftp://')
@@ -446,14 +451,18 @@ workflow {
             ]
         }
     
-    // Run Truvari benchmarking
-    TRUVARI_BENCH(
-        ch_benchmark_input,
-        ch_benchmark_vcf,
-        ch_benchmark_vcf_tbi,
-        ch_fasta,
-        ch_fasta_fai
-    )
+    // Run Truvari benchmarking (skip if benchmark_vcf is null or skip_benchmarking is true)
+    if (params.benchmark_vcf && !params.skip_benchmarking) {
+        TRUVARI_BENCH(
+            ch_benchmark_input,
+            ch_benchmark_vcf,
+            ch_benchmark_vcf_tbi,
+            ch_fasta,
+            ch_fasta_fai
+        )
+    } else {
+        log.info "Skipping Truvari benchmarking (benchmark_vcf=${params.benchmark_vcf}, skip_benchmarking=${params.skip_benchmarking})"
+    }
 }
 
 /*

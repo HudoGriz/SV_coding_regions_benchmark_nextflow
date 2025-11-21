@@ -1,0 +1,88 @@
+name: CI Testing
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - master
+  pull_request:
+    branches:
+      - main
+      - dev
+      - master
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Nextflow Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pipeline code
+        uses: actions/checkout@v4
+
+      - name: Install Nextflow
+        uses: nf-core/setup-nextflow@v1
+        with:
+          version: "latest-stable"
+
+      - name: Run Nextflow syntax check
+        run: |
+          nextflow run . -profile test --help
+
+  nf-core-lint:
+    name: nf-core Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pipeline code
+        uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install nf-core tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install nf-core
+
+      - name: Run nf-core lint (non-blocking)
+        run: |
+          nf-core lint . || true
+        continue-on-error: true
+
+  test:
+    name: Test with nf-core data
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      matrix:
+        nextflow-version: ['latest-stable', '23.10.0']
+    steps:
+      - name: Check out pipeline code
+        uses: actions/checkout@v4
+
+      - name: Install Nextflow
+        uses: nf-core/setup-nextflow@v1
+        with:
+          version: ${{ matrix.nextflow-version }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run pipeline with test_nfcore profile (stub)
+        run: |
+          nextflow run . \\
+            -profile test_nfcore,docker \\
+            -stub-run \\
+            --outdir test_results_${{ matrix.nextflow-version }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results-${{ matrix.nextflow-version }}
+          path: |
+            test_results_${{ matrix.nextflow-version }}
+            .nextflow.log

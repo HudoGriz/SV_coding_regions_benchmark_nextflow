@@ -1,0 +1,326 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema",
+    "$id": "https://raw.githubusercontent.com/HudoGriz/SV_coding_regions_benchmark_nextflow/master/nextflow_schema.json",
+    "title": "SV Coding Regions Benchmark Pipeline Parameters",
+    "description": "Comprehensive SV calling and benchmarking pipeline for multiple sequencing technologies",
+    "type": "object",
+    "definitions": {
+        "input_files": {
+            "title": "Input Files",
+            "type": "object",
+            "description": "Input files for the pipeline",
+            "default": "",
+            "properties": {
+                "fasta": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "description": "Path to reference genome FASTA file",
+                    "help_text": "Reference genome in FASTA format. Will be indexed if FAI index is not provided."
+                },
+                "fasta_fai": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "description": "Path to FAI index of reference genome (optional)",
+                    "help_text": "If not provided, will be automatically generated from the FASTA file."
+                },
+                "illumina_wes_bam": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "description": "Path to Illumina WES BAM file (optional)",
+                    "help_text": "Illumina whole-exome sequencing BAM file for short-read SV calling."
+                },
+                "illumina_wgs_bam": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "description": "Path to Illumina WGS BAM file (optional)",
+                    "help_text": "Illumina whole-genome sequencing BAM file for short-read SV calling."
+                },
+                "pacbio_bam": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "description": "Path to PacBio HiFi BAM file (optional)",
+                    "help_text": "PacBio HiFi long-read BAM file for long-read SV calling."
+                },
+                "ont_bam": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "description": "Path to Oxford Nanopore BAM file (optional)",
+                    "help_text": "Oxford Nanopore long-read BAM file for long-read SV calling."
+                },
+                "benchmark_vcf": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "description": "Path to truth/benchmark VCF file",
+                    "help_text": "Ground truth VCF file for benchmarking SV calls. Must be bgzipped and indexed."
+                },
+                "high_confidence_targets": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "description": "Path to high-confidence regions BED file (optional)",
+                    "help_text": "BED file defining high-confidence genomic regions for focused analysis."
+                },
+                "gene_panel_targets": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "description": "Path to gene panel BED file (optional)",
+                    "help_text": "BED file defining gene panel regions for targeted analysis."
+                },
+                "wes_utr_targets": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "description": "Path to WES with UTR regions BED file (optional)",
+                    "help_text": "BED file defining exome capture regions including UTRs."
+                },
+                "tandem_repeats": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "description": "Path to tandem repeats BED file (optional)",
+                    "help_text": "BED file with tandem repeat regions for filtering or annotation."
+                }
+            },
+            "required": ["fasta", "benchmark_vcf"]
+        },
+        "caller_parameters": {
+            "title": "SV Caller Parameters",
+            "type": "object",
+            "description": "Parameters for individual SV callers",
+            "default": "",
+            "properties": {
+                "enable_manta": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable Manta for short-read SV calling"
+                },
+                "enable_delly": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable DELLY for short-read SV calling"
+                },
+                "enable_lumpy": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable LUMPY for short-read SV calling"
+                },
+                "enable_tiddit": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable TIDDIT for short-read SV calling"
+                },
+                "enable_pbsv": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable pbsv for PacBio SV calling"
+                },
+                "enable_sniffles": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable Sniffles for long-read SV calling"
+                },
+                "enable_cutesv": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable cuteSV for long-read SV calling"
+                },
+                "min_sv_size": {
+                    "type": "integer",
+                    "default": 50,
+                    "description": "Minimum SV size to call (bp)"
+                },
+                "max_sv_size": {
+                    "type": "integer",
+                    "default": 1000000,
+                    "description": "Maximum SV size to call (bp)"
+                }
+            }
+        },
+        "survivor_parameters": {
+            "title": "SURVIVOR Merging Parameters",
+            "type": "object",
+            "description": "Parameters for merging SV calls with SURVIVOR",
+            "default": "",
+            "properties": {
+                "survivor_distance": {
+                    "type": "integer",
+                    "default": 1000,
+                    "description": "Maximum distance between breakpoints (bp)",
+                    "help_text": "Maximum distance for considering SVs as the same event."
+                },
+                "survivor_support": {
+                    "type": "integer",
+                    "default": 1,
+                    "description": "Minimum number of supporting callers",
+                    "help_text": "Minimum number of callers that must support an SV for it to be included in the merged set."
+                },
+                "survivor_type": {
+                    "type": "integer",
+                    "default": 1,
+                    "description": "Take SV type into account (1=yes, 0=no)",
+                    "help_text": "Whether SVs must have the same type to be merged."
+                },
+                "survivor_strand": {
+                    "type": "integer",
+                    "default": 1,
+                    "description": "Take SV strand into account (1=yes, 0=no)",
+                    "help_text": "Whether SVs must have the same strand orientation to be merged."
+                },
+                "survivor_estimate": {
+                    "type": "integer",
+                    "default": 0,
+                    "description": "Estimate SV distance (1=yes, 0=no)",
+                    "help_text": "Whether to use distance estimation for comparing SVs."
+                },
+                "survivor_min_size": {
+                    "type": "integer",
+                    "default": -1,
+                    "description": "Minimum SV size (bp, -1 for no filter)"
+                }
+            }
+        },
+        "truvari_parameters": {
+            "title": "Truvari Benchmarking Parameters",
+            "type": "object",
+            "description": "Parameters for Truvari benchmarking",
+            "default": "",
+            "properties": {
+                "truvari_refdist": {
+                    "type": "integer",
+                    "default": 500,
+                    "description": "Maximum reference location distance (bp)",
+                    "help_text": "Maximum distance between SV breakpoints for comparison."
+                },
+                "truvari_pctsize": {
+                    "type": "number",
+                    "default": 0.7,
+                    "description": "Minimum percent of SV size similarity (0-1)",
+                    "help_text": "Variants must have at least this percent size similarity to be matched."
+                },
+                "truvari_pctseq": {
+                    "type": "number",
+                    "default": 0.7,
+                    "description": "Minimum percent sequence similarity (0-1)",
+                    "help_text": "Variants must have at least this percent sequence similarity to be matched."
+                },
+                "truvari_pctovl": {
+                    "type": "number",
+                    "default": 0.0,
+                    "description": "Minimum percent reciprocal overlap (0-1)",
+                    "help_text": "Variants must have at least this percent reciprocal overlap to be matched."
+                },
+                "truvari_passonly": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Only consider variants with PASS filter"
+                },
+                "truvari_multimatch": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Allow base variants to match multiple comparison variants"
+                }
+            }
+        },
+        "output_parameters": {
+            "title": "Output Parameters",
+            "type": "object",
+            "description": "Output directory and run naming",
+            "default": "",
+            "properties": {
+                "outdir": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "default": "./results",
+                    "description": "Output directory for results",
+                    "help_text": "The output directory where the results will be saved."
+                },
+                "run_name": {
+                    "type": "string",
+                    "default": "sv_benchmark",
+                    "description": "Name for this pipeline run",
+                    "help_text": "Used to name output files and reports."
+                },
+                "publish_dir_mode": {
+                    "type": "string",
+                    "default": "copy",
+                    "enum": ["copy", "symlink", "link"],
+                    "description": "Method for publishing output files"
+                }
+            }
+        },
+        "generic_options": {
+            "title": "Generic Options",
+            "type": "object",
+            "description": "Less common options for the pipeline",
+            "default": "",
+            "properties": {
+                "help": {
+                    "type": "boolean",
+                    "description": "Display help text",
+                    "hidden": true
+                },
+                "version": {
+                    "type": "boolean",
+                    "description": "Display version and exit",
+                    "hidden": true
+                },
+                "tracedir": {
+                    "type": "string",
+                    "default": "${params.outdir}/pipeline_info",
+                    "description": "Directory to keep pipeline execution trace files"
+                },
+                "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Email address for completion notification"
+                },
+                "plaintext_email": {
+                    "type": "boolean",
+                    "description": "Send plain-text email instead of HTML"
+                }
+            }
+        },
+        "resource_limits": {
+            "title": "Resource Limits",
+            "type": "object",
+            "description": "Maximum resource limits",
+            "default": "",
+            "properties": {
+                "max_cpus": {
+                    "type": "integer",
+                    "default": 16,
+                    "description": "Maximum number of CPUs that can be requested"
+                },
+                "max_memory": {
+                    "type": "string",
+                    "default": "128.GB",
+                    "pattern": "^\\d+(\\.\\d+)?\\.?\\s*(K|M|G|T)?B$",
+                    "description": "Maximum amount of memory that can be requested"
+                },
+                "max_time": {
+                    "type": "string",
+                    "default": "240.h",
+                    "pattern": "^(\\d+\\.?\\s*(s|m|h|d|day)\\s*)+$",
+                    "description": "Maximum amount of time that can be requested"
+                }
+            }
+        }
+    },
+    "allOf": [
+        {"$ref": "#/definitions/input_files"},
+        {"$ref": "#/definitions/caller_parameters"},
+        {"$ref": "#/definitions/survivor_parameters"},
+        {"$ref": "#/definitions/truvari_parameters"},
+        {"$ref": "#/definitions/output_parameters"},
+        {"$ref": "#/definitions/generic_options"},
+        {"$ref": "#/definitions/resource_limits"}
+    ]
+}

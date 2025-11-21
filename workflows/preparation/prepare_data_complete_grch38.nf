@@ -11,10 +11,10 @@
 ----------------------------------------------------------------------------------------
 */
 
-include { DOWNLOAD_BAM as DOWNLOAD_ILLUMINA_WGS } from '../../modules/local/download_bam'
-include { DOWNLOAD_BAM as DOWNLOAD_PACBIO       } from '../../modules/local/download_bam'
-include { DOWNLOAD_BAM as DOWNLOAD_ONT          } from '../../modules/local/download_bam'
-include { DOWNLOAD_REFERENCE                    } from '../../modules/local/download_reference'
+include { DOWNLOAD_BAM as DOWNLOAD_ILLUMINA_WGS                    } from '../../modules/local/download_bam'
+include { DOWNLOAD_BAM as DOWNLOAD_PACBIO                          } from '../../modules/local/download_bam'
+include { DOWNLOAD_BAM as DOWNLOAD_ONT                             } from '../../modules/local/download_bam'
+include { DOWNLOAD_REFERENCE_GENOME_GRCH38 as DOWNLOAD_REFERENCE   } from '../../modules/local/download_reference'
 include { GUNZIP                                } from '../../modules/nf-core/gunzip/main'
 include { SAMTOOLS_FAIDX                        } from '../../modules/nf-core/samtools/faidx/main'
 include { DOWNLOAD_GIAB_TRUTH_SET_GRCH38        } from '../../modules/local/download_truth_set'

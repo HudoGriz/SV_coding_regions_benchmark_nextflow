@@ -12,12 +12,12 @@
 ----------------------------------------------------------------------------------------
 */
 
-include { DOWNLOAD_SINGULARITY_IMAGES           } from '../../modules/local/download_singularity'
-include { DOWNLOAD_BAM as DOWNLOAD_ILLUMINA_WES } from '../../modules/local/download_bam'
-include { DOWNLOAD_BAM as DOWNLOAD_ILLUMINA_WGS } from '../../modules/local/download_bam'
-include { DOWNLOAD_BAM as DOWNLOAD_PACBIO       } from '../../modules/local/download_bam'
-include { DOWNLOAD_BAM as DOWNLOAD_ONT          } from '../../modules/local/download_bam'
-include { DOWNLOAD_REFERENCE                    } from '../../modules/local/download_reference'
+include { DOWNLOAD_SINGULARITY_IMAGES                    } from '../../modules/local/download_singularity'
+include { DOWNLOAD_BAM as DOWNLOAD_ILLUMINA_WES          } from '../../modules/local/download_bam'
+include { DOWNLOAD_BAM as DOWNLOAD_ILLUMINA_WGS          } from '../../modules/local/download_bam'
+include { DOWNLOAD_BAM as DOWNLOAD_PACBIO                } from '../../modules/local/download_bam'
+include { DOWNLOAD_BAM as DOWNLOAD_ONT                   } from '../../modules/local/download_bam'
+include { DOWNLOAD_REFERENCE_GENOME as DOWNLOAD_REFERENCE } from '../../modules/local/download_reference'
 include { GUNZIP                                } from '../../modules/nf-core/gunzip/main'
 include { SAMTOOLS_FAIDX                        } from '../../modules/nf-core/samtools/faidx/main'
 include { DOWNLOAD_GIAB_TRUTH_SET               } from '../../modules/local/download_truth_set'

@@ -211,8 +211,8 @@ All test data comes from the nf-core test-datasets repository:
 - **Repository**: https://github.com/nf-core/test-datasets
 - **Branch**: modules
 - **Illumina WES**: `data/genomics/homo_sapiens/illumina/bam/test.paired_end.sorted.bam`
-- **Illumina WGS**: `data/genomics/homo_sapiens/illumina/bam/test.paired_end.sorted.bam`
-- **PacBio HiFi**: `data/genomics/homo_sapiens/pacbio/bam/test_hifi.sorted.bam`
+- **Illumina WGS**: `data/genomics/homo_sapiens/illumina/bam/test2.paired_end.sorted.bam`
+- **PacBio**: `data/genomics/homo_sapiens/pacbio/bam/test.sorted.bam`
 - **ONT**: `data/genomics/homo_sapiens/nanopore/bam/test.sorted.bam`
 - **Reference**: `data/genomics/homo_sapiens/genome/genome.fasta`
 

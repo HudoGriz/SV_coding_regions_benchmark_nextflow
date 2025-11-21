@@ -38,9 +38,11 @@ nextflow run . -profile test_nfcore,docker
 - Resource limits: 2 CPUs, 6GB memory, 6h runtime
 - Test data from nf-core/test-datasets:
   - Illumina: `test.paired_end.sorted.bam`, `test2.paired_end.sorted.bam`
-  - PacBio: `test_hifi.sorted.bam`
+  - PacBio: `test.sorted.bam`
   - ONT: `test.sorted.bam`
 - Benchmarking is disabled (no SV truth set for test data)
+- **PBSV is skipped** (test data lacks proper PacBio read group headers)
+- CuteSV still tests PacBio functionality (more flexible format requirements)
 - Increased time limit for long-read callers (2h per process)
 
 ## Running Tests Locally
@@ -58,7 +60,7 @@ nextflow run . -profile test_nfcore,docker --outdir test_results
 
 This single command tests:
 - Illumina short-read callers (Manta)
-- PacBio HiFi callers (CuteSV + PBSV)
+- PacBio callers (CuteSV - PBSV skipped due to test data format)
 - ONT callers (CuteSV + Sniffles)
 
 ## Expected Outputs
@@ -76,12 +78,10 @@ test_results/
 │       ├── Illumina_WGS_Manta.vcf.gz
 │       └── Illumina_WGS_Manta.vcf.gz.tbi
 ├── PacBio/
-│   ├── CuteSV/
-│   │   ├── PacBio_CuteSV.vcf.gz
-│   │   └── PacBio_CuteSV.vcf.gz.tbi
-│   └── Pbsv/
-│       ├── PacBio_Pbsv.vcf.gz
-│       └── PacBio_Pbsv.vcf.gz.tbi
+│   └── CuteSV/
+│       ├── PacBio_CuteSV.vcf.gz
+│       └── PacBio_CuteSV.vcf.gz.tbi
+│   (Note: PBSV skipped in test profile due to BAM format requirements)
 ├── ONT/
 │   ├── CuteSV/
 │   │   ├── ONT_CuteSV.vcf.gz
@@ -96,7 +96,8 @@ test_results/
     └── pipeline_dag.svg
 ```
 
-**Total expected VCF files**: 6 callers × 2 files (vcf.gz + tbi) = 12 files
+**Total expected VCF files**: 5 callers × 2 files (vcf.gz + tbi) = 10 files
+(Note: PBSV skipped in test profile, so 5 callers instead of 6)
 
 ## CI/CD Testing
 
@@ -107,7 +108,7 @@ The GitHub Actions workflow automatically tests all SV callers on every push and
 1. **profile-check**: Validates that test_nfcore profile loads correctly
 2. **run-test**: Runs complete SV calling pipeline for all technologies
    - Tests Illumina (Manta)
-   - Tests PacBio (CuteSV + PBSV)
+   - Tests PacBio (CuteSV only - PBSV skipped)
    - Tests ONT (CuteSV + Sniffles)
    - Validates all VCF outputs
 

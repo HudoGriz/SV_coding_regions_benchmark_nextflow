@@ -216,7 +216,13 @@ workflow {
         def technologies = []
         if (params.illumina_wes_bam) technologies << "Illumina WES (Manta)"
         if (params.illumina_wgs_bam) technologies << "Illumina WGS (Manta)"
-        if (params.pacbio_bam) technologies << "PacBio (CuteSV, PBSV)"
+        if (params.pacbio_bam) {
+            if (params.skip_pbsv) {
+                technologies << "PacBio (CuteSV only - PBSV skipped)"
+            } else {
+                technologies << "PacBio (CuteSV, PBSV)"
+            }
+        }
         if (params.ont_bam) technologies << "ONT (CuteSV, Sniffles)"
         
         log.info """
@@ -346,22 +352,25 @@ workflow {
         BGZIP_TABIX_CUTESV_PACBIO(CUTESV_PACBIO.out.vcf)
         
         // PacBio - Pbsv (requires discover + call)
-        // Step 1: Discover SV signatures
-        PBSV_DISCOVER(
-            ch_pacbio_bam.map { meta, bam, bai -> 
-                [[id: meta.id, technology: meta.technology, tool: 'Pbsv'], bam]
-            },
-            ch_fasta.map { f -> [[id: 'fasta'], f] }
-        )
-        
-        // Step 2: Call SVs from signatures
-        PBSV_CALL(
-            PBSV_DISCOVER.out.svsig,
-            ch_fasta.map { f -> [[id: 'fasta'], f] }
-        )
-        
-        // Compress and index Pbsv output
-        BGZIP_TABIX_PBSV(PBSV_CALL.out.vcf)
+        // Only run if not skipped (test data may not have proper PacBio headers)
+        if (!params.skip_pbsv) {
+            // Step 1: Discover SV signatures
+            PBSV_DISCOVER(
+                ch_pacbio_bam.map { meta, bam, bai -> 
+                    [[id: meta.id, technology: meta.technology, tool: 'Pbsv'], bam]
+                },
+                ch_fasta.map { f -> [[id: 'fasta'], f] }
+            )
+            
+            // Step 2: Call SVs from signatures
+            PBSV_CALL(
+                PBSV_DISCOVER.out.svsig,
+                ch_fasta.map { f -> [[id: 'fasta'], f] }
+            )
+            
+            // Compress and index Pbsv output
+            BGZIP_TABIX_PBSV(PBSV_CALL.out.vcf)
+        }
     }
     
     // ONT - CuteSV
@@ -422,9 +431,13 @@ workflow {
     if (params.pacbio_bam) {
         // BGZIP_TABIX outputs tuple [meta, vcf, tbi]
         ch_all_vcfs = ch_all_vcfs.mix(
-            BGZIP_TABIX_CUTESV_PACBIO.out.vcf,
-            BGZIP_TABIX_PBSV.out.vcf
+            BGZIP_TABIX_CUTESV_PACBIO.out.vcf
         )
+        if (!params.skip_pbsv) {
+            ch_all_vcfs = ch_all_vcfs.mix(
+                BGZIP_TABIX_PBSV.out.vcf
+            )
+        }
     }
     if (params.ont_bam) {
         // SNIFFLES outputs vcf and tbi separately

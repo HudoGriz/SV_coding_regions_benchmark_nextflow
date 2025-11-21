@@ -11,6 +11,60 @@ nextflow.enable.dsl=2
 ----------------------------------------------------------------------------------------
 */
 
+// Help message
+def helpMessage() {
+    log.info"""
+    =====================================================
+    SV CALLING AND BENCHMARKING PIPELINE
+    =====================================================
+    
+    Usage:
+      nextflow run main.nf -profile <profile> [options]
+    
+    Required Arguments:
+      --fasta                Reference genome FASTA file
+      --benchmark_vcf        Truth VCF for benchmarking
+      --high_confidence_targets  BED file with high confidence regions
+      --gene_panel_targets   BED file with gene panel regions
+      --wes_utr_targets      BED file with WES UTR regions
+    
+    Input BAM Files (at least one required):
+      --illumina_wes_bam     Illumina WES BAM file
+      --illumina_wgs_bam     Illumina WGS BAM file
+      --pacbio_bam           PacBio BAM file
+      --ont_bam              Oxford Nanopore BAM file
+    
+    Optional Arguments:
+      --outdir               Output directory (default: results)
+      --run_name             Run name (default: benchmarking_run)
+      --tandem_repeats       Tandem repeats BED file
+    
+    Profiles:
+      test_nfcore            Run with nf-core test data
+      test                   Run with minimal test data
+      docker                 Use Docker containers
+      singularity            Use Singularity containers
+    
+    Examples:
+      # Run with test data
+      nextflow run main.nf -profile test_nfcore,docker
+      
+      # Run with custom data
+      nextflow run main.nf -profile docker \\
+        --fasta ref.fa \\
+        --illumina_wes_bam sample.bam \\
+        --benchmark_vcf truth.vcf.gz \\
+        --high_confidence_targets regions.bed
+    =====================================================
+    """.stripIndent()
+}
+
+// Show help message if requested
+if (params.help) {
+    helpMessage()
+    exit 0
+}
+
 // Print pipeline information
 log.info """\
     =====================================================
@@ -29,6 +83,7 @@ log.info """\
 ========================================================================================
 */
 
+include { SAMTOOLS_FAIDX } from './modules/nf-core/samtools/faidx/main'
 include { MANTA_GERMLINE as MANTA_WES } from './modules/nf-core/manta/germline/main'
 include { MANTA_GERMLINE as MANTA_WGS } from './modules/nf-core/manta/germline/main'
 include { CUTESV as CUTESV_PACBIO } from './modules/nf-core/cutesv/main'
@@ -161,7 +216,13 @@ workflow {
         def technologies = []
         if (params.illumina_wes_bam) technologies << "Illumina WES (Manta)"
         if (params.illumina_wgs_bam) technologies << "Illumina WGS (Manta)"
-        if (params.pacbio_bam) technologies << "PacBio (CuteSV, PBSV)"
+        if (params.pacbio_bam) {
+            if (params.skip_pbsv) {
+                technologies << "PacBio (CuteSV only - PBSV skipped)"
+            } else {
+                technologies << "PacBio (CuteSV, PBSV)"
+            }
+        }
         if (params.ont_bam) technologies << "ONT (CuteSV, Sniffles)"
         
         log.info """
@@ -183,17 +244,43 @@ workflow {
     //
     
     // Reference files
-    ch_fasta = Channel.value(file(params.fasta))
-    ch_fasta_fai = Channel.value(file("${params.fasta}.fai"))
+    // For remote files (URLs), don't check if exists as they may need to be downloaded
+    def is_remote = params.fasta.startsWith('http://') || params.fasta.startsWith('https://') || params.fasta.startsWith('ftp://')
+    ch_fasta = Channel.value(file(params.fasta, checkIfExists: !is_remote))
     
-    // Target BED files for benchmarking
-    ch_benchmark_vcf = Channel.value(file(params.benchmark_vcf))
-    ch_benchmark_vcf_tbi = Channel.value(file("${params.benchmark_vcf}.tbi"))
+    // FAI index - create if needed for remote files or if doesn't exist locally
+    def fai_path = "${params.fasta}.fai"
+    def fai_file = file(fai_path)
     
+    if (is_remote || !fai_file.exists()) {
+        // Create FAI index using samtools faidx
+        SAMTOOLS_FAIDX(
+            ch_fasta.map { f -> [[id: 'reference'], f] },
+            [[],[]],  // No existing fai provided, will be created
+            false     // get_sizes parameter
+        )
+        ch_fasta_fai = SAMTOOLS_FAIDX.out.fai.map { meta, fai -> fai }
+    } else {
+        ch_fasta_fai = Channel.value(fai_file)
+    }
+    
+    // Benchmark VCF and index (optional for testing)
+    // For remote files, Nextflow will download them automatically
+    if (params.benchmark_vcf && !params.skip_benchmarking) {
+        def is_vcf_remote = params.benchmark_vcf.startsWith('http://') || params.benchmark_vcf.startsWith('https://') || params.benchmark_vcf.startsWith('ftp://')
+        ch_benchmark_vcf = Channel.value(file(params.benchmark_vcf, checkIfExists: !is_vcf_remote))
+        ch_benchmark_vcf_tbi = Channel.value(file("${params.benchmark_vcf}.tbi", checkIfExists: !is_vcf_remote))
+    } else {
+        ch_benchmark_vcf = Channel.empty()
+        ch_benchmark_vcf_tbi = Channel.empty()
+    }
+    
+    // Target BED files - check if remote
+    def is_targets_remote = params.high_confidence_targets.startsWith('http://') || params.high_confidence_targets.startsWith('https://') || params.high_confidence_targets.startsWith('ftp://')
     ch_targets = Channel.from([
-        ['high_confidence', file(params.high_confidence_targets)],
-        ['gene_panel', file(params.gene_panel_targets)],
-        ['wes_utr', file(params.wes_utr_targets)]
+        ['high_confidence', file(params.high_confidence_targets, checkIfExists: !is_targets_remote)],
+        ['gene_panel', file(params.gene_panel_targets, checkIfExists: !is_targets_remote)],
+        ['wes_utr', file(params.wes_utr_targets, checkIfExists: !is_targets_remote)]
     ])
     
     // Optional: ONT tandem repeats BED
@@ -207,10 +294,11 @@ workflow {
     
     // Illumina WES
     if (params.illumina_wes_bam) {
+        def is_wes_remote = params.illumina_wes_bam.startsWith('http://') || params.illumina_wes_bam.startsWith('https://')
         ch_illumina_wes_bam = Channel.value([
             [id: 'Illumina_WES', technology: 'Illumina_WES', tool: 'Manta'],
-            file(params.illumina_wes_bam),
-            file("${params.illumina_wes_bam}.bai"),
+            file(params.illumina_wes_bam, checkIfExists: !is_wes_remote),
+            file("${params.illumina_wes_bam}.bai", checkIfExists: !is_wes_remote),
             [],  // target_bed
             []   // target_bed_tbi
         ])
@@ -227,10 +315,11 @@ workflow {
     
     // Illumina WGS
     if (params.illumina_wgs_bam) {
+        def is_wgs_remote = params.illumina_wgs_bam.startsWith('http://') || params.illumina_wgs_bam.startsWith('https://')
         ch_illumina_wgs_bam = Channel.value([
             [id: 'Illumina_WGS', technology: 'Illumina_WGS', tool: 'Manta'],
-            file(params.illumina_wgs_bam),
-            file("${params.illumina_wgs_bam}.bai"),
+            file(params.illumina_wgs_bam, checkIfExists: !is_wgs_remote),
+            file("${params.illumina_wgs_bam}.bai", checkIfExists: !is_wgs_remote),
             [],  // target_bed
             []   // target_bed_tbi
         ])
@@ -263,22 +352,25 @@ workflow {
         BGZIP_TABIX_CUTESV_PACBIO(CUTESV_PACBIO.out.vcf)
         
         // PacBio - Pbsv (requires discover + call)
-        // Step 1: Discover SV signatures
-        PBSV_DISCOVER(
-            ch_pacbio_bam.map { meta, bam, bai -> 
-                [[id: meta.id, technology: meta.technology, tool: 'Pbsv'], bam]
-            },
-            ch_fasta.map { f -> [[id: 'fasta'], f] }
-        )
-        
-        // Step 2: Call SVs from signatures
-        PBSV_CALL(
-            PBSV_DISCOVER.out.svsig,
-            ch_fasta.map { f -> [[id: 'fasta'], f] }
-        )
-        
-        // Compress and index Pbsv output
-        BGZIP_TABIX_PBSV(PBSV_CALL.out.vcf)
+        // Only run if not skipped (test data may not have proper PacBio headers)
+        if (!params.skip_pbsv) {
+            // Step 1: Discover SV signatures
+            PBSV_DISCOVER(
+                ch_pacbio_bam.map { meta, bam, bai -> 
+                    [[id: meta.id, technology: meta.technology, tool: 'Pbsv'], bam]
+                },
+                ch_fasta.map { f -> [[id: 'fasta'], f] }
+            )
+            
+            // Step 2: Call SVs from signatures
+            PBSV_CALL(
+                PBSV_DISCOVER.out.svsig,
+                ch_fasta.map { f -> [[id: 'fasta'], f] }
+            )
+            
+            // Compress and index Pbsv output
+            BGZIP_TABIX_PBSV(PBSV_CALL.out.vcf)
+        }
     }
     
     // ONT - CuteSV
@@ -339,9 +431,13 @@ workflow {
     if (params.pacbio_bam) {
         // BGZIP_TABIX outputs tuple [meta, vcf, tbi]
         ch_all_vcfs = ch_all_vcfs.mix(
-            BGZIP_TABIX_CUTESV_PACBIO.out.vcf,
-            BGZIP_TABIX_PBSV.out.vcf
+            BGZIP_TABIX_CUTESV_PACBIO.out.vcf
         )
+        if (!params.skip_pbsv) {
+            ch_all_vcfs = ch_all_vcfs.mix(
+                BGZIP_TABIX_PBSV.out.vcf
+            )
+        }
     }
     if (params.ont_bam) {
         // SNIFFLES outputs vcf and tbi separately
@@ -368,14 +464,18 @@ workflow {
             ]
         }
     
-    // Run Truvari benchmarking
-    TRUVARI_BENCH(
-        ch_benchmark_input,
-        ch_benchmark_vcf,
-        ch_benchmark_vcf_tbi,
-        ch_fasta,
-        ch_fasta_fai
-    )
+    // Run Truvari benchmarking (skip if benchmark_vcf is null or skip_benchmarking is true)
+    if (params.benchmark_vcf && !params.skip_benchmarking) {
+        TRUVARI_BENCH(
+            ch_benchmark_input,
+            ch_benchmark_vcf,
+            ch_benchmark_vcf_tbi,
+            ch_fasta,
+            ch_fasta_fai
+        )
+    } else {
+        log.info "Skipping Truvari benchmarking (benchmark_vcf=${params.benchmark_vcf}, skip_benchmarking=${params.skip_benchmarking})"
+    }
 }
 
 /*

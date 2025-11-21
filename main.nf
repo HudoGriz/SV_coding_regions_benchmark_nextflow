@@ -11,6 +11,60 @@ nextflow.enable.dsl=2
 ----------------------------------------------------------------------------------------
 */
 
+// Help message
+def helpMessage() {
+    log.info"""
+    =====================================================
+    SV CALLING AND BENCHMARKING PIPELINE
+    =====================================================
+    
+    Usage:
+      nextflow run main.nf -profile <profile> [options]
+    
+    Required Arguments:
+      --fasta                Reference genome FASTA file
+      --benchmark_vcf        Truth VCF for benchmarking
+      --high_confidence_targets  BED file with high confidence regions
+      --gene_panel_targets   BED file with gene panel regions
+      --wes_utr_targets      BED file with WES UTR regions
+    
+    Input BAM Files (at least one required):
+      --illumina_wes_bam     Illumina WES BAM file
+      --illumina_wgs_bam     Illumina WGS BAM file
+      --pacbio_bam           PacBio BAM file
+      --ont_bam              Oxford Nanopore BAM file
+    
+    Optional Arguments:
+      --outdir               Output directory (default: results)
+      --run_name             Run name (default: benchmarking_run)
+      --tandem_repeats       Tandem repeats BED file
+    
+    Profiles:
+      test_nfcore            Run with nf-core test data
+      test                   Run with minimal test data
+      docker                 Use Docker containers
+      singularity            Use Singularity containers
+    
+    Examples:
+      # Run with test data
+      nextflow run main.nf -profile test_nfcore,docker
+      
+      # Run with custom data
+      nextflow run main.nf -profile docker \\
+        --fasta ref.fa \\
+        --illumina_wes_bam sample.bam \\
+        --benchmark_vcf truth.vcf.gz \\
+        --high_confidence_targets regions.bed
+    =====================================================
+    """.stripIndent()
+}
+
+// Show help message if requested
+if (params.help) {
+    helpMessage()
+    exit 0
+}
+
 // Print pipeline information
 log.info """\
     =====================================================

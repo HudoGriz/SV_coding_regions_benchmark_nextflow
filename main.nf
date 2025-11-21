@@ -210,10 +210,12 @@ workflow {
     ch_benchmark_vcf = Channel.value(file(params.benchmark_vcf, checkIfExists: !is_vcf_remote))
     ch_benchmark_vcf_tbi = Channel.value(file("${params.benchmark_vcf}.tbi", checkIfExists: !is_vcf_remote))
     
+    // Target BED files - check if remote
+    def is_targets_remote = params.high_confidence_targets.startsWith('http://') || params.high_confidence_targets.startsWith('https://') || params.high_confidence_targets.startsWith('ftp://')
     ch_targets = Channel.from([
-        ['high_confidence', file(params.high_confidence_targets, checkIfExists: true)],
-        ['gene_panel', file(params.gene_panel_targets, checkIfExists: true)],
-        ['wes_utr', file(params.wes_utr_targets, checkIfExists: true)]
+        ['high_confidence', file(params.high_confidence_targets, checkIfExists: !is_targets_remote)],
+        ['gene_panel', file(params.gene_panel_targets, checkIfExists: !is_targets_remote)],
+        ['wes_utr', file(params.wes_utr_targets, checkIfExists: !is_targets_remote)]
     ])
     
     // Optional: ONT tandem repeats BED

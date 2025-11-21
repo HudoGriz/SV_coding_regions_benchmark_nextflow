@@ -27,21 +27,23 @@ nextflow run . -profile test_nfcore,docker
 ```
 
 **What it tests:**
-- ✅ Illumina WES BAM processing (Manta)
-- ✅ Illumina WGS BAM processing (Manta)
-- ✅ PacBio HiFi BAM processing (CuteSV + PBSV)
+- ✅ Illumina short-read BAM processing (Manta via WES test)
+- ✅ PacBio HiFi BAM processing (CuteSV - PBSV skipped)
 - ✅ Oxford Nanopore BAM processing (CuteSV + Sniffles)
 - ✅ VCF compression and indexing for all callers
 - ✅ Complete pipeline integration
 
+**Note:** Illumina WGS test removed (redundant with WES - same technology, same caller)
+
 **Configuration:**
 - Resource limits: 2 CPUs, 6GB memory, 6h runtime
 - Test data from nf-core/test-datasets:
-  - Illumina: `test.paired_end.sorted.bam`, `test2.paired_end.sorted.bam`
+  - Illumina WES: `test.paired_end.sorted.bam`
   - PacBio: `test.sorted.bam`
   - ONT: `test.sorted.bam`
 - Benchmarking is disabled (no SV truth set for test data)
 - **PBSV is skipped** (test data lacks proper PacBio read group headers)
+- **Illumina WGS test removed** (redundant with WES test)
 - CuteSV still tests PacBio functionality (more flexible format requirements)
 - Increased time limit for long-read callers (2h per process)
 
@@ -59,9 +61,11 @@ nextflow run . -profile test_nfcore,docker --outdir test_results
 ```
 
 This single command tests:
-- Illumina short-read callers (Manta)
+- Illumina short-read caller (Manta via WES test only)
 - PacBio callers (CuteSV - PBSV skipped due to test data format)
 - ONT callers (CuteSV + Sniffles)
+
+**Note:** WGS test removed to eliminate redundancy (same as WES test)
 
 ## Expected Outputs
 
@@ -73,10 +77,6 @@ test_results/
 │   └── Manta/
 │       ├── Illumina_WES_Manta.vcf.gz
 │       └── Illumina_WES_Manta.vcf.gz.tbi
-├── Illumina_WGS/
-│   └── Manta/
-│       ├── Illumina_WGS_Manta.vcf.gz
-│       └── Illumina_WGS_Manta.vcf.gz.tbi
 ├── PacBio/
 │   └── CuteSV/
 │       ├── PacBio_CuteSV.vcf.gz
@@ -96,8 +96,8 @@ test_results/
     └── pipeline_dag.svg
 ```
 
-**Total expected VCF files**: 5 callers × 2 files (vcf.gz + tbi) = 10 files
-(Note: PBSV skipped in test profile, so 5 callers instead of 6)
+**Total expected VCF files**: 4 callers × 2 files (vcf.gz + tbi) = 8 files
+(Notes: PBSV skipped due to test data format; WGS test removed as redundant)
 
 ## CI/CD Testing
 
@@ -107,10 +107,10 @@ The GitHub Actions workflow automatically tests all SV callers on every push and
 
 1. **profile-check**: Validates that test_nfcore profile loads correctly
 2. **run-test**: Runs complete SV calling pipeline for all technologies
-   - Tests Illumina (Manta)
-   - Tests PacBio (CuteSV only - PBSV skipped)
+   - Tests Illumina (Manta via WES only - WGS removed as redundant)
+   - Tests PacBio (CuteSV only - PBSV skipped due to test data format)
    - Tests ONT (CuteSV + Sniffles)
-   - Validates all VCF outputs
+   - Validates all VCF outputs (4 callers total)
 
 ### Viewing CI Results
 

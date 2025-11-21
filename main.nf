@@ -38,6 +38,14 @@ def helpMessage() {
       --outdir               Output directory (default: results)
       --run_name             Run name (default: benchmarking_run)
       --tandem_repeats       Tandem repeats BED file
+      
+    Simulation Options:
+      --simulate_targets     Enable target region simulation (default: false)
+      --num_simulations      Number of simulations to run (default: 100)
+      --gencode_gtf          GENCODE GTF annotation file for simulation
+      
+    Analysis Options:
+      --gather_statistics    Generate statistics and plots (default: false)
     
     Profiles:
       test_nfcore            Run with nf-core test data
@@ -95,6 +103,8 @@ include { BGZIP_TABIX as BGZIP_TABIX_PBSV } from './modules/local/bgzip_tabix'
 include { BGZIP_TABIX as BGZIP_TABIX_CUTESV_PACBIO } from './modules/local/bgzip_tabix'
 include { BGZIP_TABIX as BGZIP_TABIX_CUTESV_ONT } from './modules/local/bgzip_tabix'
 include { TRUVARI_BENCH } from './modules/local/truvari'
+include { SIMULATE_AND_BENCHMARK } from './workflows/simulate_and_benchmark'
+include { ANALYSIS_AND_PLOTS } from './workflows/analysis_and_plots'
 include { PREPARE_GIAB_RESOURCES } from './workflows/prepare_giab_resources'
 include { PREPARE_DATA_COMPLETE_GRCH37 } from './workflows/preparation/prepare_data_complete_grch37'
 include { PREPARE_DATA_COMPLETE_GRCH38 } from './workflows/preparation/prepare_data_complete_grch38'
@@ -465,6 +475,7 @@ workflow {
         }
     
     // Run Truvari benchmarking (skip if benchmark_vcf is null or skip_benchmarking is true)
+    ch_truvari_results = Channel.empty()
     if (params.benchmark_vcf && !params.skip_benchmarking) {
         TRUVARI_BENCH(
             ch_benchmark_input,
@@ -473,8 +484,50 @@ workflow {
             ch_fasta,
             ch_fasta_fai
         )
+        ch_truvari_results = TRUVARI_BENCH.out.summary
     } else {
         log.info "Skipping Truvari benchmarking (benchmark_vcf=${params.benchmark_vcf}, skip_benchmarking=${params.skip_benchmarking})"
+    }
+    
+    //
+    // SUBWORKFLOW: Simulation and benchmarking (optional)
+    //
+    if (params.simulate_targets && params.gencode_gtf && params.benchmark_vcf) {
+        SIMULATE_AND_BENCHMARK(
+            ch_fasta,
+            ch_fasta_fai,
+            file(params.gencode_gtf, checkIfExists: true),
+            ch_benchmark_vcf,
+            ch_benchmark_vcf_tbi,
+            ch_all_vcfs,
+            params.num_simulations
+        )
+        ch_truvari_results = ch_truvari_results.mix(SIMULATE_AND_BENCHMARK.out.truvari_results)
+        
+        log.info """
+        =====================================================
+        Simulation completed: ${params.num_simulations} simulated target sets
+        =====================================================
+        """.stripIndent()
+    }
+    
+    //
+    // SUBWORKFLOW: Analysis and plots (optional)
+    //
+    if (params.gather_statistics && (params.benchmark_vcf && !params.skip_benchmarking)) {
+        // Collect run directory
+        ch_run_dir = Channel.value(file(params.outdir))
+        
+        ANALYSIS_AND_PLOTS(
+            ch_truvari_results,
+            ch_run_dir
+        )
+        
+        log.info """
+        =====================================================
+        Statistics and plots generated
+        =====================================================
+        """.stripIndent()
     }
 }
 

@@ -1,0 +1,4 @@
+task_id	hash	native_id	name	status	exit	submit	duration	realtime	%cpu	peak_rss	peak_vmem	rchar	wchar
+4	73/cdfe53	3198	SNIFFLES (ONT)	FAILED	126	2025-11-21 18:03:28.060	116ms	106ms	-	-	-	-	-
+1	6e/bdd535	3167	SAMTOOLS_FAIDX (genome.fasta)	FAILED	126	2025-11-21 18:03:27.028	1.1s	1.1s	-	-	-	-	-
+3	ef/2eeb4c	3257	CUTESV_PACBIO (PacBio)	FAILED	126	2025-11-21 18:03:28.192	115ms	88ms	-	-	-	-	-

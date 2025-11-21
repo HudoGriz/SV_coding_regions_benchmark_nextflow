@@ -1,0 +1,87 @@
+source("scripts/R/general_functions.R")
+
+library(parallel)
+
+# Set the seed for reproducibility
+set.seed(42)
+
+
+# Fetch command-line arguments
+args <- commandArgs(trailingOnly = TRUE)
+
+reps <- as.numeric(args[1])
+out_file_path <- args[2]
+
+
+simulate_targets <- function(repetition_id) {
+    # Import exome and high confidence intervals
+    exome_gr <- import_bed("data/references/exome_utr_gtf.HG002_SVs_Tier1.bed")
+    high_confidence_gr <- import_bed("data/references/HG002_SVs_Tier1_v0.6.bed")
+
+    n_splits <- 10
+
+
+    n_exons <- length(exome_gr)
+    partial <- n_exons / n_splits
+
+    exons_widths <- data.frame(
+        widths = sort(width(exome_gr)),
+        split = (1:n_exons %/% partial) + 1
+    )
+
+    exons_freq <- data.frame(table(seqnames(exome_gr)))
+    exons_freq$partial <- exons_freq$Freq / sum(exons_freq$Freq)
+
+    # Remove exons from high confidence intervals
+    gr_filtered <- setdiff(high_confidence_gr, exome_gr, ignore.strand = TRUE)
+    gr_filtered <- high_confidence_gr
+    all_chunks <- GRanges()
+
+    # Simulate targets
+    for (i in n_splits:1) {
+        exon_length <- median(exons_widths$widths[exons_widths$split == i])
+
+        for (chr in as.character(unique(seqnames(gr_filtered)))) {
+
+            random_chunks <- slidingWindows(
+                keepSeqlevels(gr_filtered, chr, pruning.mode = "coarse"),
+                width = exon_length,
+                step = exon_length
+            )
+            random_chunks <- unlist(random_chunks)
+
+            ok <- width(random_chunks) >= (exon_length / 1.25)
+            random_chunks <- random_chunks[ok]
+
+            selected <- sample(
+                1:length(random_chunks),
+                round(partial * exons_freq[exons_freq$Var1 == chr, "partial"]),
+                replace = FALSE
+                )
+            random_chunks <- random_chunks[selected]
+
+            all_chunks <- c(all_chunks, random_chunks)
+        }
+        # print(all_chunks)
+
+        gr_filtered <- setdiff(gr_filtered, all_chunks, ignore.strand = TRUE)
+
+        print(paste0("Rep ", repetition_id, " - Split ", i, " done"))
+    }
+
+    all_chunks <- sort(all_chunks)
+
+    # Save the simulated targets for the current repetition
+    output_file <- file.path(paste0(out_file_path, "/simulation", repetition_id, ".bed"))
+    write.table(
+        all_chunks,
+        output_file,
+        sep = "\t",
+        row.names = FALSE,
+        col.names = FALSE,
+        quote = FALSE
+    )
+}
+
+# Use mclapply to run the repetitions in parallel
+mclapply(1:reps, simulate_targets, mc.cores = detectCores() - 1)

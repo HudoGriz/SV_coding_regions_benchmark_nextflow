@@ -197,6 +197,62 @@ params {
 5. **Reproducibility**: Explicit container and parameter versioning
 6. **No Manual Checkpointing**: Nextflow handles execution tracking
 
+## Testing
+
+The pipeline includes comprehensive test profiles to validate functionality.
+
+### Quick Test
+
+Test the simulation features with minimal data:
+
+```bash
+nextflow run main.nf -profile test_simulation,docker
+```
+
+**Expected runtime**: ~5-10 minutes
+
+This test will:
+- Run SV calling with Illumina WES test data
+- Generate 5 simulated target regions
+- Benchmark all target sets
+- Generate statistics and plots
+
+### Test Profiles Available
+
+| Profile | Description | Runtime |
+|---------|-------------|---------|
+| `test` | Minimal functionality test | ~5 min |
+| `test_nfcore` | Standard nf-core test | ~10 min |
+| `test_simulation` | Simulation & statistics test | ~5-10 min |
+
+### Validation
+
+Check test outputs:
+
+```bash
+# Verify simulated BED files
+ls test_results_simulation/simulated_targets/*.bed | wc -l  # Should be 5
+
+# Check statistics generated
+ls test_results_simulation/statistics/plots/
+
+# View summary
+cat test_results_simulation/statistics/summary_statistics.txt
+```
+
+### Comprehensive Testing Guide
+
+For detailed testing instructions, see:
+- **Quick Reference**: [docs/QUICK_TEST.md](docs/QUICK_TEST.md)
+- **Full Testing Guide**: [docs/TESTING_SIMULATION.md](docs/TESTING_SIMULATION.md)
+- **Test Data Info**: [test_data/README.md](test_data/README.md)
+
+### CI/CD
+
+The pipeline uses GitHub Actions for continuous testing:
+- `.github/workflows/test_simulation.yml` - Simulation feature testing
+- Automatically runs on pull requests and pushes
+
 ## Troubleshooting
 
 ### Singularity Mount Issues

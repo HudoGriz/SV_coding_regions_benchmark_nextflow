@@ -183,17 +183,22 @@ workflow {
     //
     
     // Reference files
-    ch_fasta = Channel.value(file(params.fasta))
-    ch_fasta_fai = Channel.value(file("${params.fasta}.fai"))
+    // For remote files (URLs), don't check if exists as they may need to be downloaded
+    def is_remote = params.fasta.startsWith('http://') || params.fasta.startsWith('https://') || params.fasta.startsWith('ftp://')
+    ch_fasta = Channel.value(file(params.fasta, checkIfExists: !is_remote))
+    
+    // FAI index - may not exist for remote files, will be created if needed
+    def fai_path = "${params.fasta}.fai"
+    ch_fasta_fai = is_remote ? Channel.empty() : Channel.value(file(fai_path, checkIfExists: false))
     
     // Target BED files for benchmarking
-    ch_benchmark_vcf = Channel.value(file(params.benchmark_vcf))
-    ch_benchmark_vcf_tbi = Channel.value(file("${params.benchmark_vcf}.tbi"))
+    ch_benchmark_vcf = Channel.value(file(params.benchmark_vcf, checkIfExists: true))
+    ch_benchmark_vcf_tbi = Channel.value(file("${params.benchmark_vcf}.tbi", checkIfExists: true))
     
     ch_targets = Channel.from([
-        ['high_confidence', file(params.high_confidence_targets)],
-        ['gene_panel', file(params.gene_panel_targets)],
-        ['wes_utr', file(params.wes_utr_targets)]
+        ['high_confidence', file(params.high_confidence_targets, checkIfExists: true)],
+        ['gene_panel', file(params.gene_panel_targets, checkIfExists: true)],
+        ['wes_utr', file(params.wes_utr_targets, checkIfExists: true)]
     ])
     
     // Optional: ONT tandem repeats BED

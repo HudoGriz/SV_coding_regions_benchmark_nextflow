@@ -1,8 +1,6 @@
 process DOWNLOAD_GIAB_TRUTH_SET {
     tag "${meta.id}"
     label 'process_low'
-    container 'file:///singularity_images/samtools_latest.sif'
-    
     publishDir "${output_dir}", mode: 'copy'
     
     input:

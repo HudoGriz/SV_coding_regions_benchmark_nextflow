@@ -2,8 +2,6 @@ process GATHER_STATISTICS {
     tag "gathering statistics and generating plots"
     label 'process_low'
     publishDir "${params.outdir}/statistics", mode: 'copy'
-    
-    container 'library://blazv/benchmark-sv/r-env:4-4-1'
 
     input:
     path truvari_results

@@ -1,9 +1,6 @@
 process TABIX_VCF {
     tag "${vcf.name}"
     label 'process_low'
-    
-    container 'file:///singularity_images/samtools_latest.sif'
-    
     publishDir "${params.references_dir}", mode: 'copy'
     
     input:

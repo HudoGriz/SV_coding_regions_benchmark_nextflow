@@ -2,8 +2,6 @@ process BGZIP_TABIX {
     tag "${meta.id}"
     label 'process_low'
     
-    container 'community.wave.seqera.io/library/htslib:1.21--ff8e28a189fbecaa'
-    
     input:
     tuple val(meta), path(vcf)
     

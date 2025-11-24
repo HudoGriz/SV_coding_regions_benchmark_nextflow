@@ -23,7 +23,7 @@ process CREATE_EXOME_UTR_BED {
         -B \$(pwd) \\
         -B ${params.project_dir} \\
         ${r_container} \\
-        Rscript ${params.project_dir}/scripts/R/${r_script}
+        Rscript ${params.project_dir}/bin/R/${r_script}
     
     # Rename output if needed
     if [ -f "exome_utr_gtf.bed" ] && [ "${output_name}" != "exome_utr_gtf.bed" ]; then

@@ -1,6 +1,65 @@
-source("scripts/R/general_functions.R")
-
 library(ggplot2)
+library(jsonlite)
+library(GenomicRanges)
+
+# Import needed functions
+get_target_stats <- function(list_of_paths, name_after_path = c(1, 2, 4)) {
+    stat_means <- data.frame(
+        precision = numeric(),
+        recall = numeric(),
+        f1 = numeric(),
+        data_name = character()
+    )
+    stat_data <- data.frame(
+        features = character(),
+        DEL_expected = numeric(),
+        INS_expected = numeric(),
+        NORMAL_expected = numeric(),
+        precision = numeric(),
+        recall = numeric(),
+        f1 = numeric(),
+        data_name = character()
+    )
+
+    for (path in list_of_paths) {
+        
+        ### Get target benchmark statistics
+        # Get data name
+        path_split <- unlist(strsplit(path, "/"))
+        data_name <- paste0(path_split[name_after_path], collapse = "_")
+        data_name <- gsub("\\.tsv", "", data_name)
+
+        # Import all .tsv files
+        tsv_data <- read.table(path, header = TRUE, sep = "\t")
+        tsv_data$data_name <- data_name
+        stat_data <- rbind(stat_data, tsv_data)
+
+        # Calculate average precision, recall, and f1
+        col_means <- colMeans(tsv_data[, c("precision", "recall", "f1")])
+        col_means <- c(col_means, data_name = data_name)
+        stat_means <- rbind(stat_means, t(data.frame(col_means)))
+    }
+
+    # Set the right data types
+    stat_means[, 1] <- as.numeric(stat_means[, 1])
+    stat_means[, 2] <- as.numeric(stat_means[, 2])
+    stat_means[, 3] <- as.numeric(stat_means[, 3])
+
+    # Manually convert to long format
+    data_long <- data.frame(
+        data_name = rep(stat_means$data_name, times = 3),
+        Metric = rep(c("precision", "recall", "f1"), each = nrow(stat_means)),
+        Value = c(stat_means$precision, stat_means$recall, stat_means$f1)
+    )
+
+    return(
+        list(
+            stat_means = stat_means,
+            stat_data = stat_data,
+            data_long = data_long
+        )
+    )
+}
 
 
 plot_matrices <- function(df, plot_path, return_plot = FALSE) {

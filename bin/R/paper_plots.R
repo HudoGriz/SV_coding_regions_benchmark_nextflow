@@ -13,8 +13,61 @@ run_name <- args[1]
 cat("The run name is:", run_name, "\n")
 
 library(ggplot2)
+library(jsonlite)
+library(GenomicRanges)
 
-source("scripts/R/general_functions.R")
+# Import needed functions
+name_files_after_path <- function(files, name_after_path = c(1, 2, 4), file_extension = "json") {
+    names <- c()
+
+    for (path in files) {
+        # Get data name
+        path_split <- unlist(strsplit(path, "/"))
+        data_name <- paste0(path_split[name_after_path], collapse = "_")
+        data_name <- gsub(paste0("\\.", file_extension), "", data_name)
+
+        names <- c(names, data_name)
+    }
+
+    names(files) <- names
+
+    return(files)
+}
+
+get_truvari_stats <- function(json_files) {
+    wgs_stats <- data.frame()
+
+    for (n_path in 1:length(json_files)) {
+
+        json_data <- read_json_stats(json_files[n_path])
+        json_data$data_name <- names(json_files)[n_path]
+
+        wgs_stats <- rbind(wgs_stats, json_data)
+    }
+
+    # Manually convert to long format
+    data_long <- data.frame(
+        data_name = rep(wgs_stats$data_name, times = 3),
+        Metric = rep(c("precision", "recall", "f1"), each = nrow(wgs_stats)),
+        Value = c(wgs_stats$precision, wgs_stats$recall, wgs_stats$f1)
+    )
+
+    return(
+        list(
+            wgs_stats = wgs_stats,
+            data_long = data_long
+        )
+    )
+}
+
+read_json_stats <- function(x) {
+    json_data <- fromJSON(x)
+    # Replace all NULL values with NA
+    json_data <- lapply(json_data, function(x) if (is.null(x)) NA else x)
+    df_main <- as.data.frame(json_data[!names(json_data) %in% "gt_matrix"])
+    
+    return(df_main)
+}
 
 
 my_colors <- c(

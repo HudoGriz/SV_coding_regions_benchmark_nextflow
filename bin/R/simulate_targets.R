@@ -1,6 +1,23 @@
-source("scripts/R/general_functions.R")
-
 library(parallel)
+library(rtracklayer)
+library(GenomicRanges)
+
+# Import function from general_functions.R
+import_bed <- function(file_path, mcols = FALSE) {
+    bed <- read.table(file_path, header = FALSE, sep = "\t", stringsAsFactors = FALSE)
+    
+    gr <- GRanges(
+        seqnames = gsub("chr", "", bed[[1]]),
+        ranges = IRanges(start = bed[[2]], end = bed[[3]]),
+        strand = "*"
+    )
+
+    if (mcols) {
+        mcols(gr) <- bed[, -c(1:4)]
+    }
+
+    return(gr)
+}
 
 # Set the seed for reproducibility
 set.seed(42)

@@ -99,9 +99,9 @@ include { CUTESV as CUTESV_ONT } from './modules/nf-core/cutesv/main'
 include { PBSV_DISCOVER } from './modules/nf-core/pbsv/discover/main'
 include { PBSV_CALL } from './modules/nf-core/pbsv/call/main'
 include { SNIFFLES } from './modules/nf-core/sniffles/main'
-include { BGZIP_TABIX as BGZIP_TABIX_PBSV } from './modules/local/bgzip_tabix'
-include { BGZIP_TABIX as BGZIP_TABIX_CUTESV_PACBIO } from './modules/local/bgzip_tabix'
-include { BGZIP_TABIX as BGZIP_TABIX_CUTESV_ONT } from './modules/local/bgzip_tabix'
+include { TABIX_BGZIPTABIX as BGZIP_TABIX_PBSV } from './modules/nf-core/tabix/bgziptabix/main'
+include { TABIX_BGZIPTABIX as BGZIP_TABIX_CUTESV_PACBIO } from './modules/nf-core/tabix/bgziptabix/main'
+include { TABIX_BGZIPTABIX as BGZIP_TABIX_CUTESV_ONT } from './modules/nf-core/tabix/bgziptabix/main'
 include { TRUVARI_BENCH } from './modules/local/truvari'
 include { SIMULATE_AND_BENCHMARK } from './workflows/simulate_and_benchmark'
 include { ANALYSIS_AND_PLOTS } from './workflows/analysis_and_plots'
@@ -441,18 +441,18 @@ workflow {
     if (params.pacbio_bam) {
         // BGZIP_TABIX outputs tuple [meta, vcf, tbi]
         ch_all_vcfs = ch_all_vcfs.mix(
-            BGZIP_TABIX_CUTESV_PACBIO.out.vcf
+            BGZIP_TABIX_CUTESV_PACBIO.out.gz_index
         )
         if (!params.skip_pbsv) {
             ch_all_vcfs = ch_all_vcfs.mix(
-                BGZIP_TABIX_PBSV.out.vcf
+                BGZIP_TABIX_PBSV.out.gz_index
             )
         }
     }
     if (params.ont_bam) {
         // SNIFFLES outputs vcf and tbi separately
         ch_all_vcfs = ch_all_vcfs.mix(
-            BGZIP_TABIX_CUTESV_ONT.out.vcf,
+            BGZIP_TABIX_CUTESV_ONT.out.gz_index,
             SNIFFLES.out.vcf.join(SNIFFLES.out.tbi)
         )
     }

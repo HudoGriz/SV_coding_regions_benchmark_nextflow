@@ -20,7 +20,7 @@ include { SAMTOOLS_INDEX as INDEX_WES_BAM } from '../modules/nf-core/samtools/in
 include { SAMTOOLS_INDEX as INDEX_WGS_BAM } from '../modules/nf-core/samtools/index/main'
 include { SAMTOOLS_INDEX as INDEX_PACBIO_BAM } from '../modules/nf-core/samtools/index/main'
 include { SAMTOOLS_INDEX as INDEX_ONT_BAM } from '../modules/nf-core/samtools/index/main'
-include { TABIX_TABIX as TABIX_WES_TARGETS } from '../modules/nf-core/tabix/tabix/main'
+include { TABIX_BGZIPTABIX as BGZIP_TABIX_WES_TARGETS } from '../modules/nf-core/tabix/bgziptabix/main'
 
 workflow SV_CALLING {
     take:
@@ -61,19 +61,32 @@ workflow SV_CALLING {
         // Prepare target BED if provided
         if (params.wes_sequencing_targets) {
             def target_bed = file(params.wes_sequencing_targets, checkIfExists: true)
-            def target_tbi = file("${params.wes_sequencing_targets}.tbi")
+            def is_bgzipped = params.wes_sequencing_targets.endsWith('.gz')
             
-            // Check if tabix index exists, create if missing
-            if (!target_tbi.exists()) {
-                log.info "Creating tabix index for WES targets: ${params.wes_sequencing_targets}"
-                TABIX_WES_TARGETS(
+            if (is_bgzipped) {
+                // File is already bgzipped, check for tabix index
+                def target_tbi = file("${params.wes_sequencing_targets}.tbi")
+                if (!target_tbi.exists()) {
+                    log.warn """
+                    ⚠️  Bgzipped BED file found but tabix index is missing!
+                        File: ${params.wes_sequencing_targets}
+                        Expected: ${params.wes_sequencing_targets}.tbi
+                        
+                        Please create the index with:
+                        tabix -p bed ${params.wes_sequencing_targets}
+                    """.stripIndent()
+                    error "Missing tabix index for bgzipped BED file"
+                }
+                ch_wes_targets = Channel.value([target_bed, target_tbi])
+            } else {
+                // File is uncompressed, need to bgzip and index
+                log.info "Bgzipping and indexing WES targets: ${params.wes_sequencing_targets}"
+                BGZIP_TABIX_WES_TARGETS(
                     Channel.value([[id: 'wes_targets'], target_bed])
                 )
-                ch_wes_targets = TABIX_WES_TARGETS.out.index.map { meta, index_file -> 
-                    [target_bed, index_file]
+                ch_wes_targets = BGZIP_TABIX_WES_TARGETS.out.gz_index.map { meta, gz_file, tbi_file -> 
+                    [gz_file, tbi_file]
                 }
-            } else {
-                ch_wes_targets = Channel.value([target_bed, target_tbi])
             }
         } else {
             ch_wes_targets = Channel.value([[], []])

@@ -91,99 +91,117 @@
             },
             "required": ["fasta", "benchmark_vcf"]
         },
-        "caller_parameters": {
-            "title": "SV Caller Parameters",
+        "tool_control": {
+            "title": "Tool Control",
             "type": "object",
-            "description": "Parameters for individual SV callers",
+            "description": "Control which tools to run",
             "default": "",
             "properties": {
-                "enable_manta": {
+                "skip_pbsv": {
                     "type": "boolean",
-                    "default": true,
-                    "description": "Enable Manta for short-read SV calling"
+                    "default": false,
+                    "description": "Skip PBSV calling (for test data without proper PacBio headers)",
+                    "help_text": "PBSV requires proper PacBio BAM headers. Set to true when using test data."
                 },
-                "enable_delly": {
+                "skip_benchmarking": {
                     "type": "boolean",
-                    "default": true,
-                    "description": "Enable DELLY for short-read SV calling"
-                },
-                "enable_lumpy": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Enable LUMPY for short-read SV calling"
-                },
-                "enable_tiddit": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Enable TIDDIT for short-read SV calling"
-                },
-                "enable_pbsv": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Enable pbsv for PacBio SV calling"
-                },
-                "enable_sniffles": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Enable Sniffles for long-read SV calling"
-                },
-                "enable_cutesv": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Enable cuteSV for long-read SV calling"
-                },
-                "min_sv_size": {
-                    "type": "integer",
-                    "default": 50,
-                    "description": "Minimum SV size to call (bp)"
-                },
-                "max_sv_size": {
-                    "type": "integer",
-                    "default": 1000000,
-                    "description": "Maximum SV size to call (bp)"
+                    "default": false,
+                    "description": "Skip Truvari benchmarking",
+                    "help_text": "Set to true to only run SV calling without benchmarking."
                 }
             }
         },
-        "survivor_parameters": {
-            "title": "SURVIVOR Merging Parameters",
+        "simulation_parameters": {
+            "title": "Simulation Parameters",
             "type": "object",
-            "description": "Parameters for merging SV calls with SURVIVOR",
+            "description": "Parameters for target region simulation",
             "default": "",
             "properties": {
-                "survivor_distance": {
-                    "type": "integer",
-                    "default": 1000,
-                    "description": "Maximum distance between breakpoints (bp)",
-                    "help_text": "Maximum distance for considering SVs as the same event."
+                "simulate_targets": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Enable random target region simulation",
+                    "help_text": "Simulate random combinations of genes to assess robustness."
                 },
-                "survivor_support": {
+                "num_simulations": {
                     "type": "integer",
-                    "default": 1,
-                    "description": "Minimum number of supporting callers",
-                    "help_text": "Minimum number of callers that must support an SV for it to be included in the merged set."
+                    "default": 100,
+                    "description": "Number of simulations to run",
+                    "help_text": "Number of random target sets to generate and benchmark."
                 },
-                "survivor_type": {
-                    "type": "integer",
-                    "default": 1,
-                    "description": "Take SV type into account (1=yes, 0=no)",
-                    "help_text": "Whether SVs must have the same type to be merged."
+                "gencode_gtf": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "description": "Path to GENCODE GTF annotation file (required for simulation)",
+                    "help_text": "GTF file with gene annotations for extracting gene coordinates."
+                }
+            }
+        },
+        "analysis_parameters": {
+            "title": "Analysis Parameters",
+            "type": "object",
+            "description": "Parameters for downstream analysis",
+            "default": "",
+            "properties": {
+                "gather_statistics": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Generate aggregate statistics and plots",
+                    "help_text": "Run analysis workflow to aggregate results and create visualizations."
+                }
+            }
+        },
+        "data_preparation": {
+            "title": "Data Preparation",
+            "type": "object",
+            "description": "Parameters for automatic data download and preparation",
+            "default": "",
+            "properties": {
+                "prepare_giab_resources": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Download GIAB truth sets and annotations only",
+                    "help_text": "Minimal data preparation: downloads truth VCF and annotations."
                 },
-                "survivor_strand": {
-                    "type": "integer",
-                    "default": 1,
-                    "description": "Take SV strand into account (1=yes, 0=no)",
-                    "help_text": "Whether SVs must have the same strand orientation to be merged."
+                "prepare_complete_data": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Download complete dataset including BAM files",
+                    "help_text": "Full data preparation: downloads reference, BAMs, truth sets, and annotations."
                 },
-                "survivor_estimate": {
-                    "type": "integer",
-                    "default": 0,
-                    "description": "Estimate SV distance (1=yes, 0=no)",
-                    "help_text": "Whether to use distance estimation for comparing SVs."
+                "genome": {
+                    "type": "string",
+                    "default": "hs37d5",
+                    "enum": ["hs37d5", "GRCh37", "GRCh38"],
+                    "description": "Reference genome version for data preparation",
+                    "help_text": "Choose genome version when using prepare_complete_data."
                 },
-                "survivor_min_size": {
-                    "type": "integer",
-                    "default": -1,
-                    "description": "Minimum SV size (bp, -1 for no filter)"
+                "skip_singularity_download": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Skip downloading Singularity containers (GRCh37 only)"
+                },
+                "skip_bam_download": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Skip downloading BAM files"
+                },
+                "skip_reference_download": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Skip downloading reference genome"
+                },
+                "download_grch37_liftover": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Download GRCh37 liftover truth sets (GRCh38 only)"
+                },
+                "project_dir": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "default": "${projectDir}",
+                    "description": "Project directory for data preparation outputs"
                 }
             }
         },
@@ -316,8 +334,10 @@
     },
     "allOf": [
         {"$ref": "#/definitions/input_files"},
-        {"$ref": "#/definitions/caller_parameters"},
-        {"$ref": "#/definitions/survivor_parameters"},
+        {"$ref": "#/definitions/tool_control"},
+        {"$ref": "#/definitions/simulation_parameters"},
+        {"$ref": "#/definitions/analysis_parameters"},
+        {"$ref": "#/definitions/data_preparation"},
         {"$ref": "#/definitions/truvari_parameters"},
         {"$ref": "#/definitions/output_parameters"},
         {"$ref": "#/definitions/generic_options"},

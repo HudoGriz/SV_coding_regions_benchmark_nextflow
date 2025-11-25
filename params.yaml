@@ -4,36 +4,35 @@
 # Pipeline run name
 run_name: 'benchmarking_run'
 
-# Output directory (will be created relative to launch directory)
+# Output directory
 outdir: 'results'
 
-# Reference genome
-fasta: '/path/to/data/references/human_hs37d5.fasta'
+# Reference genome (REQUIRED)
+fasta: '/path/to/reference/genome.fasta'
 
-# Input BAM files (comment out technologies you don't want to run)
-illumina_wes_bam: '/path/to/data/Illumina_wes/bam/151002_7001448_0359_AC7F6GANXX_Sample_HG002-EEogPU_v02-KIT-Av5_AGATGTAC_L008.posiSrt.markDup.bam'
-illumina_wgs_bam: '/path/to/data/Illumina_wgs/bam/HG002.hs37d5.60x.1.bam'
-pacbio_bam: '/path/to/data/Pacbio/bam/HG002_PacBio-HiFi-Revio_20231031_48x_GRCh37.bam'
-ont_bam: '/path/to/data/ONT/bam/HG002_GRCh37_ONT-UL_UCSC_20200508.phased.bam'
+# Input BAM files (provide at least one)
+illumina_wes_bam: null
+illumina_wgs_bam: null
+pacbio_bam: null
+ont_bam: null
 
-# Benchmarking VCF (truth set)
-benchmark_vcf: '/path/to/data/references/HG002_SVs_Tier1_v0.6.vcf.gz'
+# Benchmarking files (optional - set skip_benchmarking: true if not using)
+benchmark_vcf: null
+skip_benchmarking: false
+high_confidence_targets: null
+gene_panel_targets: null
+wes_utr_targets: null
 
-# Target BED files for benchmarking
-high_confidence_targets: '/path/to/data/references/HG002_SVs_Tier1_v0.6.bed'
-gene_panel_targets: '/path/to/data/references/Paediatric_disorders.HG002_SVs_Tier1.bed'
-wes_utr_targets: '/path/to/data/references/exome_utr_gtf.HG002_SVs_Tier1.bed'
+# Optional: Tandem repeats BED file (recommended for Sniffles)
+tandem_repeats: null
 
-# Optional: Tandem repeats BED file (for Sniffles)
-tandem_repeats: '/path/to/data/references/human_hs37d5.trf.bed'
-
-# Truvari benchmarking parameters (WGS/PacBio/ONT)
+# Truvari benchmarking parameters
 truvari_refdist: 500
 truvari_pctsize: 0.7
 truvari_pctovl: 0
 truvari_pctseq: 0
 
-# Truvari benchmarking parameters (WES-specific)
+# WES-specific Truvari parameters (if different from above)
 truvari_wes_refdist: 500
 truvari_wes_pctsize: 0.7
 truvari_wes_pctovl: 0
@@ -44,5 +43,6 @@ max_cpus: 24
 max_memory: '128.GB'
 max_time: '48.h'
 
-# Singularity container directory
-singularity_image_dir: './singularity_images'
+# Optional features
+simulate_targets: false
+gather_statistics: false

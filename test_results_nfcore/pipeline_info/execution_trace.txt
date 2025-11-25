@@ -1,0 +1,4 @@
+task_id	hash	native_id	name	status	exit	submit	duration	realtime	%cpu	peak_rss	peak_vmem	rchar	wchar
+2	ea/d23c0c	3070	SV_CALLING:SNIFFLES (ONT)	FAILED	126	2025-11-25 08:04:28.000	348ms	332ms	-	-	-	-	-
+1	bc/ed04ed	3025	PREPARE_REFERENCES:SAMTOOLS_FAIDX (genome.fasta)	FAILED	126	2025-11-25 08:04:26.721	1.7s	1.6s	-	-	-	-	-
+4	65/1b721a	3133	SV_CALLING:CUTESV_PACBIO (PacBio)	FAILED	126	2025-11-25 08:04:28.431	179ms	160ms	-	-	-	-	-

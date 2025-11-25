@@ -59,7 +59,6 @@ workflow SV_CALLING {
         }
         
         // Prepare target BED if provided
-        def ch_wes_targets = Channel.empty()
         if (params.wes_sequencing_targets) {
             def target_bed = file(params.wes_sequencing_targets, checkIfExists: true)
             def target_tbi = file("${params.wes_sequencing_targets}.tbi")
@@ -70,8 +69,8 @@ workflow SV_CALLING {
                 TABIX_WES_TARGETS(
                     Channel.value([[id: 'wes_targets'], target_bed])
                 )
-                ch_wes_targets = TABIX_WES_TARGETS.out.index.map { meta, tbi -> 
-                    [target_bed, tbi]
+                ch_wes_targets = TABIX_WES_TARGETS.out.index.map { meta, index_file -> 
+                    [target_bed, index_file]
                 }
             } else {
                 ch_wes_targets = Channel.value([target_bed, target_tbi])
@@ -83,7 +82,12 @@ workflow SV_CALLING {
         // Combine BAM and targets
         ch_illumina_wes_bam = ch_wes_bam_indexed
             .combine(ch_wes_targets)
-            .map { meta, bam, bai, target_bed, target_tbi ->
+            .map { tuple ->
+                def meta = tuple[0]
+                def bam = tuple[1]
+                def bai = tuple[2]
+                def target_bed = tuple[3]
+                def target_tbi = tuple[4]
                 [
                     [id: meta.id, technology: 'Illumina_WES', tool: 'Manta'],
                     bam,

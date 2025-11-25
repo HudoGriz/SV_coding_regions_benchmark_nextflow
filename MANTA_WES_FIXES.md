@@ -1,9 +1,15 @@
-# Manta WES Configuration Fixes
+# Manta WES Configuration Fixes & Improvements
 
 ## Summary
-Fixed the MANTA_WES process to properly support Whole Exome Sequencing analysis by adding:
-1. The `--exome` flag to turn off depth filters for WES data
-2. The `--callRegions` parameter to restrict variant calling to target regions
+Fixed and improved the MANTA_WES process to properly support Whole Exome Sequencing analysis:
+
+### Core Fixes
+1. Added `--exome` flag to turn off depth filters for WES data
+2. Added `--callRegions` parameter support to restrict variant calling to target regions
+
+### Improvements
+3. Auto-detection of tabix index files (.tbi)
+4. Cleaned up container configuration (removed redundant overrides)
 
 ## Changes Made
 
@@ -45,9 +51,51 @@ withName: 'MANTA_WGS' {
 }
 ```
 
+## Improvement Details
+
+### Auto-detection of Tabix Index (NEW!)
+The pipeline now automatically detects the `.tbi` index file for the target BED:
+- **No longer requires explicit index specification**
+- Provides helpful warning if index is missing
+- Includes instructions for creating the index
+
+If the index is missing, you'll see:
+```
+⚠️  Tabix index not found for WES target regions!
+    Expected: /path/to/targets.bed.gz.tbi
+    
+    To create the index, run:
+    tabix -p bed /path/to/targets.bed.gz
+```
+
+### Cleaned Up Container Configuration (NEW!)
+Removed redundant container specifications from `conf/modules.config`:
+
+**Before (68 lines):**
+```groovy
+withName: 'MANTA_WES' {
+    container = 'quay.io/biocontainers/manta:1.6.0--h9ee0642_1'  // Redundant!
+    ext.args = '--exome'
+}
+```
+
+**After (35 lines):**
+```groovy
+withName: 'MANTA_WES' {
+    ext.args = '--exome'  // Only override what's needed
+}
+```
+
+**Benefits:**
+- Containers automatically inherit from nf-core modules
+- Easier maintenance (no version conflicts)
+- Cleaner, more readable configuration
+- Follows nf-core best practices
+
 ## Usage
 
-To use the WES target regions, provide the path to your bgzip-compressed and tabix-indexed BED file:
+To use the WES target regions, provide the path to your bgzip-compressed BED file.
+The tabix index (.tbi) will be auto-detected:
 
 ### Command line:
 ```bash
@@ -68,7 +116,7 @@ wes_sequencing_targets: '/path/to/targets.bed.gz'
 
 1. **BED file format**: The target BED file MUST be:
    - bgzip-compressed (`.bed.gz`)
-   - tabix-indexed (`.bed.gz.tbi` file must exist)
+   - tabix-indexed (`.bed.gz.tbi` file should exist - will auto-detect)
    - Containing the same chromosome names as the reference genome
 
 2. **Preparing the BED file**:
@@ -76,6 +124,8 @@ wes_sequencing_targets: '/path/to/targets.bed.gz'
    # If you have an uncompressed BED file:
    bgzip targets.bed
    tabix -p bed targets.bed.gz
+   
+   # The pipeline will automatically find targets.bed.gz.tbi
    ```
 
 3. **What --exome does**: 

@@ -68,29 +68,22 @@ If the index is missing, you'll see:
     tabix -p bed /path/to/targets.bed.gz
 ```
 
-### Cleaned Up Container Configuration (NEW!)
-Removed redundant container specifications from `conf/modules.config`:
+### Container Configuration
+Container specifications are explicitly defined in `conf/modules.config`:
 
-**Before (68 lines):**
 ```groovy
 withName: 'MANTA_WES' {
-    container = 'quay.io/biocontainers/manta:1.6.0--h9ee0642_1'  // Redundant!
-    ext.args = '--exome'
+    container = 'quay.io/biocontainers/manta:1.6.0--h9ee0642_1'
+    ext.args = '--exome'  // Turn off depth filters for WES data
 }
 ```
 
-**After (35 lines):**
-```groovy
-withName: 'MANTA_WES' {
-    ext.args = '--exome'  // Only override what's needed
-}
-```
-
-**Benefits:**
-- Containers automatically inherit from nf-core modules
-- Easier maintenance (no version conflicts)
-- Cleaner, more readable configuration
-- Follows nf-core best practices
+**Why explicit container paths?**
+Some nf-core modules have incorrect or incomplete container paths (e.g., missing `quay.io/` registry prefix). The explicit specifications ensure:
+- ✅ Correct registry paths (`quay.io/biocontainers`)
+- ✅ Pinned versions for reproducibility
+- ✅ Compatibility with both Docker and Singularity
+- ✅ No runtime errors from missing containers
 
 ## Usage
 

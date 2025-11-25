@@ -49,14 +49,18 @@ workflow PREPARE_REFERENCES {
     }
     
     // Target BED files - check if remote
-    def is_targets_remote = params.high_confidence_targets.startsWith('http://') || 
-                           params.high_confidence_targets.startsWith('https://') || 
-                           params.high_confidence_targets.startsWith('ftp://')
-    ch_targets = Channel.from([
-        ['high_confidence', file(params.high_confidence_targets, checkIfExists: !is_targets_remote)],
-        ['gene_panel', file(params.gene_panel_targets, checkIfExists: !is_targets_remote)],
-        ['wes_utr', file(params.wes_utr_targets, checkIfExists: !is_targets_remote)]
-    ])
+    if (params.high_confidence_targets && params.gene_panel_targets && params.wes_utr_targets) {
+        def is_targets_remote = params.high_confidence_targets.startsWith('http://') || 
+                            params.high_confidence_targets.startsWith('https://') || 
+                            params.high_confidence_targets.startsWith('ftp://')
+        ch_targets = Channel.from([
+            ['high_confidence', file(params.high_confidence_targets, checkIfExists: !is_targets_remote)],
+            ['gene_panel', file(params.gene_panel_targets, checkIfExists: !is_targets_remote)],
+            ['wes_utr', file(params.wes_utr_targets, checkIfExists: !is_targets_remote)]
+        ])
+    } else {
+        ch_targets = Channel.empty()
+    }
     
     // Optional: ONT tandem repeats BED
     ch_tandem_repeats = params.tandem_repeats ? 

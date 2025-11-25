@@ -35,12 +35,36 @@ workflow SV_CALLING {
         def is_remote = params.illumina_wes_bam.startsWith('http://') || 
                        params.illumina_wes_bam.startsWith('https://')
         
+        // Prepare target BED if provided
+        // Note: The BED file should be bgzipped (.bed.gz) and the .tbi index will be auto-detected
+        def target_bed = params.wes_sequencing_targets ? 
+            file(params.wes_sequencing_targets, checkIfExists: true) : []
+        def target_bed_tbi = []
+        
+        // Auto-detect tabix index file (.tbi)
+        if (params.wes_sequencing_targets) {
+            def tbi_file = file("${params.wes_sequencing_targets}.tbi")
+            if (tbi_file.exists()) {
+                target_bed_tbi = tbi_file
+            } else {
+                log.warn """
+                ⚠️  Tabix index not found for WES target regions!
+                    Expected: ${params.wes_sequencing_targets}.tbi
+                    
+                    To create the index, run:
+                    tabix -p bed ${params.wes_sequencing_targets}
+                    
+                    Manta may fail without the index file.
+                """.stripIndent()
+            }
+        }
+        
         ch_illumina_wes_bam = Channel.value([
             [id: 'Illumina_WES', technology: 'Illumina_WES', tool: 'Manta'],
             file(params.illumina_wes_bam, checkIfExists: !is_remote),
             file("${params.illumina_wes_bam}.bai", checkIfExists: !is_remote),
-            [],  // target_bed
-            []   // target_bed_tbi
+            target_bed,
+            target_bed_tbi
         ])
         
         MANTA_WES(

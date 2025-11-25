@@ -23,6 +23,9 @@ high_confidence_targets: null
 gene_panel_targets: null
 wes_utr_targets: null
 
+# WES-specific files
+wes_sequencing_targets: null  # Bgzipped BED file for Manta --callRegions (auto-detects .tbi index)
+
 # Optional: Tandem repeats BED file (recommended for Sniffles)
 tandem_repeats: null
 

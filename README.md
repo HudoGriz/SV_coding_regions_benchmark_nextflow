@@ -131,6 +131,15 @@ results/
 
 **Note:** Only provide BAM files for technologies you want to analyze. The pipeline will automatically skip technologies without BAM files.
 
+### Optional Annotation Files
+
+| Parameter | Description | Used By |
+|-----------|-------------|---------|
+| `tandem_repeats` | Tandem repeat regions BED file (e.g., from TRF) | Sniffles (ONT) |
+| `wes_sequencing_targets` | WES capture target regions BED file | Manta (WES) |
+
+**Tandem Repeats:** Improves Sniffles SV calling accuracy in repetitive regions. Can be generated using [Tandem Repeats Finder (TRF)](https://tandem.bu.edu/trf/trf.html) or downloaded from genome annotation databases.
+
 ### Truvari Parameters
 
 | Parameter | Default | Description |

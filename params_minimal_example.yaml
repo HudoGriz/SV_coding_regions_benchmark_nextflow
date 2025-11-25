@@ -30,6 +30,10 @@ wes_utr_targets: null
 # Optional features - DISABLED for minimal run
 simulate_targets: false
 gather_statistics: false
+
+# Optional: Tandem repeats BED file for Sniffles (ONT SV calling)
+# Improves calling accuracy in repetitive regions
+# Example: tandem_repeats: '/path/to/genome.trf.bed'
 tandem_repeats: null
 
 # Resource limits (adjust based on your system)

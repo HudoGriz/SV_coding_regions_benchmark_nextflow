@@ -35,12 +35,18 @@ workflow SV_CALLING {
         def is_remote = params.illumina_wes_bam.startsWith('http://') || 
                        params.illumina_wes_bam.startsWith('https://')
         
+        // Prepare target BED if provided
+        def target_bed = params.wes_sequencing_targets ? 
+            file(params.wes_sequencing_targets, checkIfExists: true) : []
+        def target_bed_tbi = params.wes_sequencing_targets ? 
+            file("${params.wes_sequencing_targets}.tbi", checkIfExists: true) : []
+        
         ch_illumina_wes_bam = Channel.value([
             [id: 'Illumina_WES', technology: 'Illumina_WES', tool: 'Manta'],
             file(params.illumina_wes_bam, checkIfExists: !is_remote),
             file("${params.illumina_wes_bam}.bai", checkIfExists: !is_remote),
-            [],  // target_bed
-            []   // target_bed_tbi
+            target_bed,
+            target_bed_tbi
         ])
         
         MANTA_WES(

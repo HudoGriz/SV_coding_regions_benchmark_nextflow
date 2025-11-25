@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        profile: ['docker']
+        profile: ['docker', 'singularity']
     
     steps:
       - name: Checkout code
@@ -47,7 +47,21 @@ jobs:
         with:
           version: "24.04.0"
       
+      - name: Setup Apptainer (Singularity)
+        if: matrix.profile == 'singularity'
+        uses: eWaterCycle/setup-apptainer@v2
+        with:
+          apptainer-version: 1.3.0
+      
+      - name: Setup Apptainer cache directory
+        if: matrix.profile == 'singularity'
+        run: |
+          mkdir -p $HOME/.apptainer/cache
+          echo "APPTAINER_CACHEDIR=$HOME/.apptainer/cache" >> $GITHUB_ENV
+          echo "SINGULARITY_CACHEDIR=$HOME/.apptainer/cache" >> $GITHUB_ENV
+      
       - name: Setup Docker
+        if: matrix.profile == 'docker'
         uses: docker/setup-buildx-action@v3
       
       - name: Cache Nextflow assets
@@ -59,6 +73,15 @@ jobs:
           key: ${{ runner.os }}-nextflow-${{ hashFiles('**/nextflow.config') }}
           restore-keys: |
             ${{ runner.os }}-nextflow-
+      
+      - name: Cache Apptainer/Singularity containers
+        if: matrix.profile == 'singularity'
+        uses: actions/cache@v4
+        with:
+          path: ~/.apptainer/cache
+          key: ${{ runner.os }}-apptainer-${{ hashFiles('**/nextflow.config') }}
+          restore-keys: |
+            ${{ runner.os }}-apptainer-
       
       - name: Check test GTF file exists
         run: |

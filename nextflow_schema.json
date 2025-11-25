@@ -81,6 +81,13 @@
                     "description": "Path to WES with UTR regions BED file (optional)",
                     "help_text": "BED file defining exome capture regions including UTRs."
                 },
+                "wes_sequencing_targets": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "description": "Path to WES sequencing target regions BED file (optional)",
+                    "help_text": "Bgzipped and tabix-indexed BED file (.bed.gz) with exome target regions. Used by Manta's --callRegions parameter to restrict variant calling to sequencing targets. The .tbi index will be auto-detected."
+                },
                 "tandem_repeats": {
                     "type": "string",
                     "format": "file-path",

@@ -52,11 +52,11 @@ workflow PREPARE_REFERENCES {
         ch_benchmark_vcf_tbi = Channel.empty()
     }
     
-    // Target BED files - only create channels if provided
+    // Target BED files - check if remote
     if (params.high_confidence_targets && params.gene_panel_targets && params.wes_utr_targets) {
         def is_targets_remote = params.high_confidence_targets.startsWith('http://') || 
-                               params.high_confidence_targets.startsWith('https://') || 
-                               params.high_confidence_targets.startsWith('ftp://')
+                            params.high_confidence_targets.startsWith('https://') || 
+                            params.high_confidence_targets.startsWith('ftp://')
         ch_targets = Channel.from([
             ['high_confidence', file(params.high_confidence_targets, checkIfExists: !is_targets_remote)],
             ['gene_panel', file(params.gene_panel_targets, checkIfExists: !is_targets_remote)],

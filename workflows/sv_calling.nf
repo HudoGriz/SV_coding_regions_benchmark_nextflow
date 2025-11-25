@@ -45,7 +45,7 @@ workflow SV_CALLING {
         
         // Check if BAM index exists, create if missing
         if (!wes_bai.exists() && !is_remote) {
-            log.info "Creating BAM index for Illumina WES: ${params.illumina_wes_bam}"
+            log.info "📑 Auto-generating BAM index for Illumina WES (this may take a few minutes)..."
             INDEX_WES_BAM(
                 Channel.value([[id: 'Illumina_WES'], wes_bam])
             )
@@ -80,7 +80,7 @@ workflow SV_CALLING {
                 ch_wes_targets = Channel.value([target_bed, target_tbi])
             } else {
                 // File is uncompressed, need to bgzip and index
-                log.info "Bgzipping and indexing WES targets: ${params.wes_sequencing_targets}"
+                log.info "📦 Auto-compressing and indexing WES target regions (bgzip + tabix)..."
                 BGZIP_TABIX_WES_TARGETS(
                     Channel.value([[id: 'wes_targets'], target_bed])
                 )
@@ -134,7 +134,7 @@ workflow SV_CALLING {
         
         // Check if BAM index exists, create if missing
         if (!wgs_bai.exists() && !is_remote) {
-            log.info "Creating BAM index for Illumina WGS: ${params.illumina_wgs_bam}"
+            log.info "📑 Auto-generating BAM index for Illumina WGS (this may take a few minutes)..."
             INDEX_WGS_BAM(
                 Channel.value([[id: 'Illumina_WGS'], wgs_bam])
             )
@@ -178,7 +178,7 @@ workflow SV_CALLING {
         
         // Check if BAM index exists, create if missing
         if (!pacbio_bai.exists()) {
-            log.info "Creating BAM index for PacBio: ${params.pacbio_bam}"
+            log.info "📑 Auto-generating BAM index for PacBio (this may take a few minutes)..."
             INDEX_PACBIO_BAM(
                 Channel.value([[id: 'PacBio'], pacbio_bam])
             )
@@ -235,7 +235,7 @@ workflow SV_CALLING {
         
         // Check if BAM index exists, create if missing
         if (!ont_bai.exists()) {
-            log.info "Creating BAM index for ONT: ${params.ont_bam}"
+            log.info "📑 Auto-generating BAM index for ONT (this may take a few minutes)..."
             INDEX_ONT_BAM(
                 Channel.value([[id: 'ONT'], ont_bam])
             )

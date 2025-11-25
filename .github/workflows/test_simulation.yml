@@ -32,11 +32,8 @@ on:
 
 jobs:
   test-simulation:
-    name: Test Simulation and Statistics
+    name: Test Simulation and Statistics (Singularity)
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        profile: ['docker', 'singularity']
     
     steps:
       - name: Checkout code
@@ -48,21 +45,15 @@ jobs:
           version: "24.04.0"
       
       - name: Setup Apptainer (Singularity)
-        if: matrix.profile == 'singularity'
         uses: eWaterCycle/setup-apptainer@v2
         with:
           apptainer-version: 1.3.0
       
       - name: Setup Apptainer cache directory
-        if: matrix.profile == 'singularity'
         run: |
           mkdir -p $HOME/.apptainer/cache
           echo "APPTAINER_CACHEDIR=$HOME/.apptainer/cache" >> $GITHUB_ENV
           echo "SINGULARITY_CACHEDIR=$HOME/.apptainer/cache" >> $GITHUB_ENV
-      
-      - name: Setup Docker
-        if: matrix.profile == 'docker'
-        uses: docker/setup-buildx-action@v3
       
       - name: Cache Nextflow assets
         uses: actions/cache@v4
@@ -75,7 +66,6 @@ jobs:
             ${{ runner.os }}-nextflow-
       
       - name: Cache Apptainer/Singularity containers
-        if: matrix.profile == 'singularity'
         uses: actions/cache@v4
         with:
           path: ~/.apptainer/cache
@@ -113,9 +103,9 @@ jobs:
       
       - name: Run simulation test
         run: |
-          echo "🧪 Running simulation test with profile: test_simulation,${{ matrix.profile }}"
+          echo "🧪 Running simulation test with Singularity profile"
           nextflow run main.nf \
-            -profile test_simulation,${{ matrix.profile }} \
+            -profile test_simulation,singularity \
             -with-report test_simulation_report.html \
             -with-timeline test_simulation_timeline.html \
             -with-trace test_simulation_trace.txt \
@@ -218,7 +208,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: simulation-test-results-${{ matrix.profile }}
+          name: simulation-test-results-singularity
           path: |
             test_results_simulation/
             test_simulation_*.html
@@ -229,7 +219,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nextflow-reports-simulation-${{ matrix.profile }}
+          name: nextflow-reports-simulation-singularity
           path: |
             test_simulation_report.html
             test_simulation_timeline.html

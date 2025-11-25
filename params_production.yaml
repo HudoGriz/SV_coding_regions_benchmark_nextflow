@@ -1,0 +1,112 @@
+# =====================================================
+# Production Parameters for SV Calling Pipeline
+# =====================================================
+# Based on: /home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow
+# Original bash script: scripts/run_all_analyses_and_bench.sh
+
+# -----------------------------------------------------
+# Run Configuration
+# -----------------------------------------------------
+run_name: 'benchmarking_run'
+outdir: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/benchmarking_run'
+
+# -----------------------------------------------------
+# Reference Genome
+# -----------------------------------------------------
+# Path to your reference genome (hs37d5 or GRCh37)
+fasta: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/reference/hs37d5.fa'
+
+# -----------------------------------------------------
+# Input BAM Files
+# -----------------------------------------------------
+# Illumina WES (Whole Exome Sequencing)
+illumina_wes_bam: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/Illumina_wes/bam/151002_7001448_0359_AC7F6GANXX_Sample_HG002-EEogPU_v02-KIT-Av5_AGATGTAC_L008.posiSrt.markDup.bam'
+
+# Illumina WGS (Whole Genome Sequencing)
+illumina_wgs_bam: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/Illumina_wgs/bam/HG002.hs37d5.60x.1.bam'
+
+# PacBio HiFi
+pacbio_bam: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/Pacbio/bam/HG002_PacBio-HiFi-Revio_20231031_48x_GRCh37.bam'
+
+# Oxford Nanopore (ONT)
+ont_bam: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/ONT/bam/HG002_GRCh37_ONT-UL_UCSC_20200508.phased.bam'
+
+# -----------------------------------------------------
+# Benchmarking Truth Set
+# -----------------------------------------------------
+# GIAB HG002 Tier 1 v0.6 benchmark VCF
+benchmark_vcf: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/benchmark/HG002_SVs_Tier1_v0.6.vcf.gz'
+
+# -----------------------------------------------------
+# Target Region BED Files
+# -----------------------------------------------------
+# High confidence regions (GIAB)
+high_confidence_targets: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/targets/HG002_SVs_Tier1_v0.6.bed'
+
+# Gene panel regions (coding regions)
+gene_panel_targets: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/targets/gene_panel.bed'
+
+# WES + UTR regions
+wes_utr_targets: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/targets/wes_utr_regions.bed'
+
+# WES sequencing targets (exome capture regions for Manta --callRegions)
+# This is DIFFERENT from wes_utr_targets - this is the actual exome capture kit BED file
+# Used by Manta to restrict SV calling to exome regions for better performance and accuracy
+wes_sequencing_targets: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/targets/exome_capture_targets.bed'
+
+# Tandem repeats (for filtering/annotation)
+tandem_repeats: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/targets/tandem_repeats.bed'
+
+# -----------------------------------------------------
+# Pipeline Control
+# -----------------------------------------------------
+# Enable benchmarking against truth set
+skip_benchmarking: false
+
+# Skip PBSV (use only CuteSV for PacBio)
+skip_pbsv: false  # Set to true if you want to skip PBSV
+
+# -----------------------------------------------------
+# Truvari Benchmarking Parameters
+# -----------------------------------------------------
+# Default parameters for WGS data
+truvari_refdist: 500
+truvari_pctsize: 0.7
+truvari_pctovl: 0.0
+truvari_pctseq: 0.0
+
+# WES-specific Truvari parameters (applied automatically for WES data)
+# These are defined in the workflow but can be overridden here if needed
+# truvari_wes_refdist: 500
+# truvari_wes_pctsize: 0.0
+# truvari_wes_pctovl: 0.0
+# truvari_wes_pctseq: 0.0
+
+# -----------------------------------------------------
+# Simulation and Statistics (Optional)
+# -----------------------------------------------------
+# Enable target simulation and statistical analysis
+simulate_targets: false
+num_simulations: 100
+
+# GENCODE GTF for gene annotation (if doing simulation)
+gencode_gtf: null  # e.g., '/path/to/gencode.v19.annotation.gtf.gz'
+
+# Gather statistics after benchmarking
+gather_statistics: false
+
+# -----------------------------------------------------
+# Resource Limits
+# -----------------------------------------------------
+max_cpus: 24
+max_memory: '128.GB'
+max_time: '48.h'
+
+# -----------------------------------------------------
+# Additional Notes
+# -----------------------------------------------------
+# 1. Make sure all BAM files have their .bai index files in the same directory
+# 2. Make sure the reference FASTA has .fai index
+# 3. The benchmark VCF should be bgzipped and tabix-indexed (.tbi)
+# 4. All target BED files should be sorted and in the same coordinate system as the reference
+# 5. Paths can be absolute or relative to the launch directory

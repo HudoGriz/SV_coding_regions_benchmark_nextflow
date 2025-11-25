@@ -1,0 +1,96 @@
+# =====================================================
+# Minimal Example - Test with Single Technology
+# =====================================================
+# Use this for quick testing with just Illumina WES
+# Once this works, scale up to full params_production.yaml
+
+# -----------------------------------------------------
+# Run Configuration
+# -----------------------------------------------------
+run_name: 'test_illumina_wes'
+outdir: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/test_illumina_wes'
+
+# -----------------------------------------------------
+# Reference Genome (REQUIRED)
+# -----------------------------------------------------
+fasta: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/reference/hs37d5.fa'
+
+# -----------------------------------------------------
+# Single Technology - Illumina WES
+# -----------------------------------------------------
+illumina_wes_bam: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/Illumina_wes/bam/151002_7001448_0359_AC7F6GANXX_Sample_HG002-EEogPU_v02-KIT-Av5_AGATGTAC_L008.posiSrt.markDup.bam'
+
+# Leave other technologies null (will be skipped)
+illumina_wgs_bam: null
+pacbio_bam: null
+ont_bam: null
+
+# -----------------------------------------------------
+# Target BED Files (REQUIRED - even if skip_benchmarking=true)
+# -----------------------------------------------------
+# These are ALWAYS required by the workflow, even without benchmarking
+# You need to create these files or point to existing ones
+
+# Option 1: Use actual target files if you have them
+high_confidence_targets: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/targets/HG002_SVs_Tier1_v0.6.bed'
+gene_panel_targets: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/targets/gene_panel.bed'
+wes_utr_targets: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/targets/wes_utr_regions.bed'
+
+# Option 2: If you don't have these files, create dummy BED files:
+# Create them with: touch dummy.bed
+# Then use:
+# high_confidence_targets: '/path/to/dummy.bed'
+# gene_panel_targets: '/path/to/dummy.bed'
+# wes_utr_targets: '/path/to/dummy.bed'
+
+# WES sequencing targets (IMPORTANT for Illumina WES!)
+# This is the exome capture kit BED file - used by Manta --callRegions
+# Restricts SV calling to exome regions for better performance/accuracy
+# If running WES, this should match your capture kit regions
+wes_sequencing_targets: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/targets/exome_capture_targets.bed'
+
+# Optional: Tandem repeats (for ONT/Sniffles - can be null if not using ONT)
+tandem_repeats: null
+
+# -----------------------------------------------------
+# Benchmarking (Optional)
+# -----------------------------------------------------
+# Skip benchmarking for initial test
+skip_benchmarking: true
+
+# To enable benchmarking, set:
+# skip_benchmarking: false
+# benchmark_vcf: '/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextflow/data/benchmark/HG002_SVs_Tier1_v0.6.vcf.gz'
+
+# -----------------------------------------------------
+# Other Pipeline Controls
+# -----------------------------------------------------
+skip_pbsv: false
+simulate_targets: false
+gather_statistics: false
+prepare_giab_resources: false
+prepare_complete_data: false
+
+# -----------------------------------------------------
+# Resource Limits
+# -----------------------------------------------------
+max_cpus: 8
+max_memory: '32.GB'
+max_time: '12.h'
+
+# -----------------------------------------------------
+# Usage Instructions
+# -----------------------------------------------------
+# BEFORE RUNNING:
+# 1. Update all paths above to match your actual file locations
+# 2. Make sure BAM file has .bai index in same directory
+# 3. Make sure reference has .fai index
+# 4. Create or specify target BED files (REQUIRED!)
+#
+# RUN:
+#   nextflow run main.nf -params-file params_minimal_example.yaml -profile singularity -resume
+#
+# EXPECTED OUTPUT:
+#   test_illumina_wes/calls/Illumina_wes/sv/manta/results/variants/diploidSV.vcf.gz
+#
+# If this works, expand to full production run with params_production.yaml

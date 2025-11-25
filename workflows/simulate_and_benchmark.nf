@@ -7,7 +7,7 @@
 */
 
 include { SIMULATE_TARGETS } from '../modules/local/simulate_targets'
-include { TRUVARI_BENCH } from '../modules/local/truvari'
+include { TRUVARI_BENCH } from '../modules/nf-core/truvari/bench/main'
 
 workflow SIMULATE_AND_BENCHMARK {
     take:
@@ -54,14 +54,31 @@ workflow SIMULATE_AND_BENCHMARK {
         }
 
     //
+    // Prepare input for TRUVARI_BENCH: combine truth VCF+index and FASTA+index into proper format
+    //
+    ch_truth_vcf_with_index = ch_benchmark_vcf
+        .combine(ch_benchmark_vcf_tbi)
+        .map { vcf, tbi -> [[id: 'truth'], vcf, tbi] }
+    
+    ch_fasta_with_index = ch_fasta
+        .combine(ch_fasta_fai)
+        .map { fasta, fai -> [[id: 'reference'], fasta, fai] }
+
+    //
+    // Remap bench input to match nf-core module expectations
+    //
+    ch_truvari_input = ch_bench_input
+        .map { meta, vcf, tbi, bed ->
+            [meta, vcf, tbi, bed]
+        }
+
+    //
     // Run Truvari benchmarking on simulated targets
     //
     TRUVARI_BENCH(
-        ch_bench_input,
-        ch_benchmark_vcf,
-        ch_benchmark_vcf_tbi,
-        ch_fasta,
-        ch_fasta_fai
+        ch_truvari_input,
+        ch_truth_vcf_with_index,
+        ch_fasta_with_index
     )
 
     emit:

@@ -102,7 +102,7 @@ include { SNIFFLES } from './modules/nf-core/sniffles/main'
 include { TABIX_BGZIPTABIX as BGZIP_TABIX_PBSV } from './modules/nf-core/tabix/bgziptabix/main'
 include { TABIX_BGZIPTABIX as BGZIP_TABIX_CUTESV_PACBIO } from './modules/nf-core/tabix/bgziptabix/main'
 include { TABIX_BGZIPTABIX as BGZIP_TABIX_CUTESV_ONT } from './modules/nf-core/tabix/bgziptabix/main'
-include { TRUVARI_BENCH } from './modules/local/truvari'
+include { TRUVARI_BENCH } from './modules/nf-core/truvari/bench/main'
 include { SIMULATE_AND_BENCHMARK } from './workflows/simulate_and_benchmark'
 include { ANALYSIS_AND_PLOTS } from './workflows/analysis_and_plots'
 include { PREPARE_GIAB_RESOURCES } from './workflows/prepare_giab_resources'
@@ -463,7 +463,7 @@ workflow {
         .map { meta, vcf, vcf_tbi, target_name, target_bed ->
             [
                 [
-                    id: meta.id,
+                    id: "${meta.id}_${target_name}",
                     technology: meta.technology,
                     tool: meta.tool,
                     target: target_name
@@ -477,12 +477,30 @@ workflow {
     // Run Truvari benchmarking (skip if benchmark_vcf is null or skip_benchmarking is true)
     ch_truvari_results = Channel.empty()
     if (params.benchmark_vcf && !params.skip_benchmarking) {
+        // Restructure input for nf-core module: tuple [meta, vcf, tbi, truth_vcf, truth_tbi, bed]
+        ch_truvari_input = ch_benchmark_input
+            .combine(ch_benchmark_vcf)
+            .combine(ch_benchmark_vcf_tbi)
+            .map { meta, vcf, vcf_tbi, target_bed, truth_vcf, truth_tbi ->
+                // Determine if WES-specific parameters should be used
+                def is_wes = meta.technology == 'Illumina_WES'
+                def refdist = is_wes ? params.truvari_wes_refdist : params.truvari_refdist
+                def pctsize = is_wes ? params.truvari_wes_pctsize : params.truvari_pctsize
+                def pctovl = is_wes ? params.truvari_wes_pctovl : params.truvari_pctovl
+                def pctseq = is_wes ? params.truvari_wes_pctseq : params.truvari_pctseq
+                
+                // Add truvari parameters to metadata for ext.args configuration
+                def meta_with_args = meta + [
+                    truvari_args: "--refdist ${refdist} --pctsize ${pctsize} --pctovl ${pctovl} --pctseq ${pctseq}"
+                ]
+                
+                [meta_with_args, vcf, vcf_tbi, truth_vcf, truth_tbi, target_bed]
+            }
+        
         TRUVARI_BENCH(
-            ch_benchmark_input,
-            ch_benchmark_vcf,
-            ch_benchmark_vcf_tbi,
-            ch_fasta,
-            ch_fasta_fai
+            ch_truvari_input,
+            ch_fasta.map { f -> [[id: 'fasta'], f] },
+            ch_fasta_fai.map { f -> [[id: 'fai'], f] }
         )
         ch_truvari_results = TRUVARI_BENCH.out.summary
     } else {

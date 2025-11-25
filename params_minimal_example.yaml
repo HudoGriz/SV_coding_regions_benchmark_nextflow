@@ -1,0 +1,38 @@
+# Minimal example parameter file for testing SV calling without benchmarking
+# This demonstrates the minimum required parameters to run the pipeline
+
+# Pipeline run name
+run_name: 'test_illumina_wes'
+
+# Output directory
+outdir: 'results'
+
+# Reference genome (REQUIRED)
+fasta: '/path/to/reference/genome.fasta'
+
+# Input BAM file (at least one required)
+illumina_wes_bam: '/path/to/wes.bam'
+illumina_wgs_bam: null
+pacbio_bam: null
+ont_bam: null
+
+# WES-specific: Target regions for Manta --callRegions (optional but recommended)
+# This should be a bgzipped BED file (.bed.gz) with tabix index (.bed.gz.tbi)
+wes_sequencing_targets: null  # e.g., '/path/to/exome_targets.bed.gz'
+
+# Benchmarking - DISABLED for minimal run
+skip_benchmarking: true
+benchmark_vcf: null
+high_confidence_targets: null
+gene_panel_targets: null
+wes_utr_targets: null
+
+# Optional features - DISABLED for minimal run
+simulate_targets: false
+gather_statistics: false
+tandem_repeats: null
+
+# Resource limits (adjust based on your system)
+max_cpus: 8
+max_memory: '32.GB'
+max_time: '24.h'

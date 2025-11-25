@@ -13,6 +13,10 @@ workflow PREPARE_REFERENCES {
     main:
     
     // Reference FASTA file
+    if (!params.fasta) {
+        error "ERROR: Reference FASTA file must be specified with --fasta parameter"
+    }
+    
     // For remote files (URLs), don't check if exists as they may need to be downloaded
     def is_remote = params.fasta.startsWith('http://') || 
                     params.fasta.startsWith('https://') || 
@@ -48,15 +52,19 @@ workflow PREPARE_REFERENCES {
         ch_benchmark_vcf_tbi = Channel.empty()
     }
     
-    // Target BED files - check if remote
-    def is_targets_remote = params.high_confidence_targets.startsWith('http://') || 
-                           params.high_confidence_targets.startsWith('https://') || 
-                           params.high_confidence_targets.startsWith('ftp://')
-    ch_targets = Channel.from([
-        ['high_confidence', file(params.high_confidence_targets, checkIfExists: !is_targets_remote)],
-        ['gene_panel', file(params.gene_panel_targets, checkIfExists: !is_targets_remote)],
-        ['wes_utr', file(params.wes_utr_targets, checkIfExists: !is_targets_remote)]
-    ])
+    // Target BED files - only create channels if provided
+    if (params.high_confidence_targets && params.gene_panel_targets && params.wes_utr_targets) {
+        def is_targets_remote = params.high_confidence_targets.startsWith('http://') || 
+                               params.high_confidence_targets.startsWith('https://') || 
+                               params.high_confidence_targets.startsWith('ftp://')
+        ch_targets = Channel.from([
+            ['high_confidence', file(params.high_confidence_targets, checkIfExists: !is_targets_remote)],
+            ['gene_panel', file(params.gene_panel_targets, checkIfExists: !is_targets_remote)],
+            ['wes_utr', file(params.wes_utr_targets, checkIfExists: !is_targets_remote)]
+        ])
+    } else {
+        ch_targets = Channel.empty()
+    }
     
     // Optional: ONT tandem repeats BED
     ch_tandem_repeats = params.tandem_repeats ? 

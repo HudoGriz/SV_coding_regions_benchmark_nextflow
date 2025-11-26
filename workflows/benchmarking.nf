@@ -22,7 +22,9 @@ workflow BENCHMARKING {
     // Create combinations of VCFs and target sets for benchmarking
     ch_benchmark_input = ch_vcfs
         .combine(ch_targets)
-        .map { meta, vcf, vcf_tbi, target_name, target_bed ->
+        .combine(ch_benchmark_vcf)
+        .combine(ch_benchmark_vcf_tbi)
+        .map { meta, vcf, vcf_tbi, target_name, target_bed, truth_vcf, truth_tbi ->
             // Determine if WES-specific parameters should be used
             def is_wes = meta.technology == 'Illumina_WES'
             def refdist = is_wes ? params.truvari_wes_refdist : params.truvari_refdist
@@ -36,24 +38,18 @@ workflow BENCHMARKING {
                 truvari_args: "--refdist ${refdist} --pctsize ${pctsize} --pctovl ${pctovl} --pctseq ${pctseq}"
             ]
             
-            [meta_with_args, vcf, vcf_tbi, target_bed]
+            [meta_with_args, vcf, vcf_tbi, truth_vcf, truth_tbi, target_bed]
         }
     
-    // Prepare truth VCF channel for TRUVARI_BENCH
-    ch_truth_vcf = ch_benchmark_vcf
-        .combine(ch_benchmark_vcf_tbi)
-        .map { vcf, tbi -> [[id: 'truth'], vcf, tbi] }
-    
     // Prepare reference FASTA channel for TRUVARI_BENCH
-    ch_fasta_with_index = ch_fasta
-        .combine(ch_fasta_fai)
-        .map { fasta, fai -> [[id: 'reference'], fasta, fai] }
+    ch_fasta_with_meta = ch_fasta.map { fasta -> [[id: 'reference'], fasta] }
+    ch_fasta_fai_with_meta = ch_fasta_fai.map { fai -> [[id: 'reference'], fai] }
     
     // Run Truvari benchmarking
     TRUVARI_BENCH(
         ch_benchmark_input,
-        ch_truth_vcf,
-        ch_fasta_with_index
+        ch_fasta_with_meta,
+        ch_fasta_fai_with_meta
     )
     
     emit:

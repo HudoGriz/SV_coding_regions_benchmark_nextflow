@@ -13,6 +13,10 @@ workflow PREPARE_REFERENCES {
     main:
     
     // Reference FASTA file
+    if (!params.fasta) {
+        error "ERROR: Reference FASTA file must be specified with --fasta parameter"
+    }
+    
     // For remote files (URLs), don't check if exists as they may need to be downloaded
     def is_remote = params.fasta.startsWith('http://') || 
                     params.fasta.startsWith('https://') || 

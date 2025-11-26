@@ -16,6 +16,11 @@ include { SNIFFLES } from '../modules/nf-core/sniffles/main'
 include { TABIX_BGZIPTABIX as BGZIP_TABIX_PBSV } from '../modules/nf-core/tabix/bgziptabix/main'
 include { TABIX_BGZIPTABIX as BGZIP_TABIX_CUTESV_PACBIO } from '../modules/nf-core/tabix/bgziptabix/main'
 include { TABIX_BGZIPTABIX as BGZIP_TABIX_CUTESV_ONT } from '../modules/nf-core/tabix/bgziptabix/main'
+include { SAMTOOLS_INDEX as INDEX_WES_BAM } from '../modules/nf-core/samtools/index/main'
+include { SAMTOOLS_INDEX as INDEX_WGS_BAM } from '../modules/nf-core/samtools/index/main'
+include { SAMTOOLS_INDEX as INDEX_PACBIO_BAM } from '../modules/nf-core/samtools/index/main'
+include { SAMTOOLS_INDEX as INDEX_ONT_BAM } from '../modules/nf-core/samtools/index/main'
+include { TABIX_BGZIPTABIX as BGZIP_TABIX_WES_TARGETS } from '../modules/nf-core/tabix/bgziptabix/main'
 
 workflow SV_CALLING {
     take:
@@ -35,37 +40,75 @@ workflow SV_CALLING {
         def is_remote = params.illumina_wes_bam.startsWith('http://') || 
                        params.illumina_wes_bam.startsWith('https://')
         
-        // Prepare target BED if provided
-        // Note: The BED file should be bgzipped (.bed.gz) and the .tbi index will be auto-detected
-        def target_bed = params.wes_sequencing_targets ? 
-            file(params.wes_sequencing_targets, checkIfExists: true) : []
-        def target_bed_tbi = []
+        def wes_bam = file(params.illumina_wes_bam, checkIfExists: !is_remote)
+        def wes_bai = file("${params.illumina_wes_bam}.bai")
         
-        // Auto-detect tabix index file (.tbi)
-        if (params.wes_sequencing_targets) {
-            def tbi_file = file("${params.wes_sequencing_targets}.tbi")
-            if (tbi_file.exists()) {
-                target_bed_tbi = tbi_file
-            } else {
-                log.warn """
-                ⚠️  Tabix index not found for WES target regions!
-                    Expected: ${params.wes_sequencing_targets}.tbi
-                    
-                    To create the index, run:
-                    tabix -p bed ${params.wes_sequencing_targets}
-                    
-                    Manta may fail without the index file.
-                """.stripIndent()
+        // Check if BAM index exists, create if missing
+        if (!wes_bai.exists() && !is_remote) {
+            log.info "📑 Auto-generating BAM index for Illumina WES (this may take a few minutes)..."
+            INDEX_WES_BAM(
+                Channel.value([[id: 'Illumina_WES'], wes_bam])
+            )
+            ch_wes_bam_indexed = INDEX_WES_BAM.out.bai.map { meta, bai -> 
+                [meta, wes_bam, bai]
             }
+        } else {
+            ch_wes_bam_indexed = Channel.value([
+                [id: 'Illumina_WES'], wes_bam, wes_bai
+            ])
         }
         
-        ch_illumina_wes_bam = Channel.value([
-            [id: 'Illumina_WES', technology: 'Illumina_WES', tool: 'Manta'],
-            file(params.illumina_wes_bam, checkIfExists: !is_remote),
-            file("${params.illumina_wes_bam}.bai", checkIfExists: !is_remote),
-            target_bed,
-            target_bed_tbi
-        ])
+        // Prepare target BED if provided
+        if (params.wes_sequencing_targets) {
+            def target_bed = file(params.wes_sequencing_targets, checkIfExists: true)
+            def is_bgzipped = params.wes_sequencing_targets.endsWith('.gz')
+            
+            if (is_bgzipped) {
+                // File is already bgzipped, check for tabix index
+                def target_tbi = file("${params.wes_sequencing_targets}.tbi")
+                if (!target_tbi.exists()) {
+                    log.warn """
+                    ⚠️  Bgzipped BED file found but tabix index is missing!
+                        File: ${params.wes_sequencing_targets}
+                        Expected: ${params.wes_sequencing_targets}.tbi
+                        
+                        Please create the index with:
+                        tabix -p bed ${params.wes_sequencing_targets}
+                    """.stripIndent()
+                    error "Missing tabix index for bgzipped BED file"
+                }
+                ch_wes_targets = Channel.value([target_bed, target_tbi])
+            } else {
+                // File is uncompressed, need to bgzip and index
+                log.info "📦 Auto-compressing and indexing WES target regions (bgzip + tabix)..."
+                BGZIP_TABIX_WES_TARGETS(
+                    Channel.value([[id: 'wes_targets'], target_bed])
+                )
+                ch_wes_targets = BGZIP_TABIX_WES_TARGETS.out.gz_index.map { meta, gz_file, tbi_file -> 
+                    [gz_file, tbi_file]
+                }
+            }
+        } else {
+            ch_wes_targets = Channel.value([[], []])
+        }
+        
+        // Combine BAM and targets
+        ch_illumina_wes_bam = ch_wes_bam_indexed
+            .combine(ch_wes_targets)
+            .map { tuple ->
+                def meta = tuple[0]
+                def bam = tuple[1]
+                def bai = tuple[2]
+                def target_bed = tuple[3]
+                def target_tbi = tuple[4]
+                [
+                    [id: meta.id, technology: 'Illumina_WES', tool: 'Manta'],
+                    bam,
+                    bai,
+                    target_bed,
+                    target_tbi
+                ]
+            }
         
         MANTA_WES(
             ch_illumina_wes_bam,
@@ -86,13 +129,33 @@ workflow SV_CALLING {
         def is_remote = params.illumina_wgs_bam.startsWith('http://') || 
                        params.illumina_wgs_bam.startsWith('https://')
         
-        ch_illumina_wgs_bam = Channel.value([
-            [id: 'Illumina_WGS', technology: 'Illumina_WGS', tool: 'Manta'],
-            file(params.illumina_wgs_bam, checkIfExists: !is_remote),
-            file("${params.illumina_wgs_bam}.bai", checkIfExists: !is_remote),
-            [],  // target_bed
-            []   // target_bed_tbi
-        ])
+        def wgs_bam = file(params.illumina_wgs_bam, checkIfExists: !is_remote)
+        def wgs_bai = file("${params.illumina_wgs_bam}.bai")
+        
+        // Check if BAM index exists, create if missing
+        if (!wgs_bai.exists() && !is_remote) {
+            log.info "📑 Auto-generating BAM index for Illumina WGS (this may take a few minutes)..."
+            INDEX_WGS_BAM(
+                Channel.value([[id: 'Illumina_WGS'], wgs_bam])
+            )
+            ch_illumina_wgs_bam = INDEX_WGS_BAM.out.bai.map { meta, bai -> 
+                [
+                    [id: meta.id, technology: 'Illumina_WGS', tool: 'Manta'],
+                    wgs_bam,
+                    bai,
+                    [],  // target_bed
+                    []   // target_bed_tbi
+                ]
+            }
+        } else {
+            ch_illumina_wgs_bam = Channel.value([
+                [id: 'Illumina_WGS', technology: 'Illumina_WGS', tool: 'Manta'],
+                wgs_bam,
+                wgs_bai,
+                [],  // target_bed
+                []   // target_bed_tbi
+            ])
+        }
         
         MANTA_WGS(
             ch_illumina_wgs_bam,
@@ -110,11 +173,25 @@ workflow SV_CALLING {
     // PacBio - CuteSV
     //
     if (params.pacbio_bam) {
-        ch_pacbio_bam = Channel.value([
-            [id: 'PacBio', technology: 'PacBio'],
-            file(params.pacbio_bam),
-            file("${params.pacbio_bam}.bai")
-        ])
+        def pacbio_bam = file(params.pacbio_bam, checkIfExists: true)
+        def pacbio_bai = file("${params.pacbio_bam}.bai")
+        
+        // Check if BAM index exists, create if missing
+        if (!pacbio_bai.exists()) {
+            log.info "📑 Auto-generating BAM index for PacBio (this may take a few minutes)..."
+            INDEX_PACBIO_BAM(
+                Channel.value([[id: 'PacBio'], pacbio_bam])
+            )
+            ch_pacbio_bam = INDEX_PACBIO_BAM.out.bai.map { meta, bai -> 
+                [meta + [technology: 'PacBio'], pacbio_bam, bai]
+            }
+        } else {
+            ch_pacbio_bam = Channel.value([
+                [id: 'PacBio', technology: 'PacBio'],
+                pacbio_bam,
+                pacbio_bai
+            ])
+        }
         
         CUTESV_PACBIO(
             ch_pacbio_bam.map { meta, bam, bai -> 
@@ -153,11 +230,25 @@ workflow SV_CALLING {
     // ONT - CuteSV
     //
     if (params.ont_bam) {
-        ch_ont_bam = Channel.value([
-            [id: 'ONT', technology: 'ONT'],
-            file(params.ont_bam),
-            file("${params.ont_bam}.bai")
-        ])
+        def ont_bam = file(params.ont_bam, checkIfExists: true)
+        def ont_bai = file("${params.ont_bam}.bai")
+        
+        // Check if BAM index exists, create if missing
+        if (!ont_bai.exists()) {
+            log.info "📑 Auto-generating BAM index for ONT (this may take a few minutes)..."
+            INDEX_ONT_BAM(
+                Channel.value([[id: 'ONT'], ont_bam])
+            )
+            ch_ont_bam = INDEX_ONT_BAM.out.bai.map { meta, bai -> 
+                [meta + [technology: 'ONT'], ont_bam, bai]
+            }
+        } else {
+            ch_ont_bam = Channel.value([
+                [id: 'ONT', technology: 'ONT'],
+                ont_bam,
+                ont_bai
+            ])
+        }
         
         CUTESV_ONT(
             ch_ont_bam.map { meta, bam, bai -> 

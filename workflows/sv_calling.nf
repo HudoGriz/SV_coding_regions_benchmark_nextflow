@@ -45,7 +45,6 @@ workflow SV_CALLING {
         
         // Check if BAM index exists, create if missing
         if (!wes_bai.exists() && !is_remote) {
-            log.info "📑 Auto-generating BAM index for Illumina WES (this may take a few minutes)..."
             INDEX_WES_BAM(
                 Channel.value([[id: 'Illumina_WES'], wes_bam])
             )
@@ -80,7 +79,6 @@ workflow SV_CALLING {
                 ch_wes_targets = Channel.value([target_bed, target_tbi])
             } else {
                 // File is uncompressed, need to bgzip and index
-                log.info "📦 Auto-compressing and indexing WES target regions (bgzip + tabix)..."
                 BGZIP_TABIX_WES_TARGETS(
                     Channel.value([[id: 'wes_targets'], target_bed])
                 )
@@ -134,7 +132,6 @@ workflow SV_CALLING {
         
         // Check if BAM index exists, create if missing
         if (!wgs_bai.exists() && !is_remote) {
-            log.info "📑 Auto-generating BAM index for Illumina WGS (this may take a few minutes)..."
             INDEX_WGS_BAM(
                 Channel.value([[id: 'Illumina_WGS'], wgs_bam])
             )

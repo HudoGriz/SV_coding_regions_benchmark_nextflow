@@ -18,6 +18,8 @@ workflow SIMULATE_AND_BENCHMARK {
     ch_benchmark_vcf_tbi    // channel: truth VCF index
     ch_vcfs                 // channel: [meta, vcf, tbi] - all SV caller VCFs to benchmark
     num_simulations         // val: number of simulations to run
+    ch_wes_utr_targets      // channel: WES+UTR targets BED file
+    ch_high_confidence_targets  // channel: high confidence regions BED
 
     main:
     //
@@ -26,7 +28,9 @@ workflow SIMULATE_AND_BENCHMARK {
     SIMULATE_TARGETS(
         num_simulations,
         ch_fasta,
-        ch_gencode_gtf
+        ch_gencode_gtf,
+        ch_wes_utr_targets,
+        ch_high_confidence_targets
     )
 
     //

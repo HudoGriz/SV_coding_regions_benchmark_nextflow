@@ -225,14 +225,37 @@ workflow {
     // SUBWORKFLOW: Simulation and benchmarking (optional)
     //
     if (params.simulate_targets && params.gencode_gtf && params.benchmark_vcf) {
+        // Validate required parameters - check all at once
+        def missing_params = []
+        if (!params.wes_utr_targets) missing_params << "--wes_utr_targets"
+        if (!params.high_confidence_targets) missing_params << "--high_confidence_targets"
+        
+        if (missing_params) {
+            error """
+            =====================================================
+            ERROR: Simulation requires the following parameters:
+            ${missing_params.collect { "  ${it} <path/to/file.bed>" }.join('\n')}
+            
+            Example:
+            --wes_utr_targets data/references/exome_utr_gtf.HG002_SVs_Tier1.bed
+            --high_confidence_targets data/references/HG002_SVs_Tier1_v0.6.bed
+            =====================================================
+            """.stripIndent()
+        }
+        
+        // Create channels with file existence validation
+        ch_wes_utr = Channel.fromPath(params.wes_utr_targets, checkIfExists: true)
+        ch_high_confidence = Channel.fromPath(params.high_confidence_targets, checkIfExists: true)
+        
         SIMULATE_AND_BENCHMARK(
             ch_fasta,
             ch_fasta_fai,
-            file(params.gencode_gtf, checkIfExists: true),
             ch_benchmark_vcf,
             ch_benchmark_vcf_tbi,
             SV_CALLING.out.vcfs,
-            params.num_simulations
+            params.num_simulations,
+            ch_wes_utr,
+            ch_high_confidence
         )
         ch_truvari_results = ch_truvari_results.mix(SIMULATE_AND_BENCHMARK.out.truvari_results)
         

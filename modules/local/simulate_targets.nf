@@ -5,7 +5,8 @@ process SIMULATE_TARGETS {
     input:
     val num_simulations
     path reference_fasta
-    path gencode_gtf
+    path wes_utr_targets          // Add this
+    path high_confidence_targets   // Add this
 
     output:
     path "simulated_targets/*.bed", emit: simulated_beds
@@ -17,6 +18,8 @@ process SIMULATE_TARGETS {
     
     Rscript ${projectDir}/bin/R/simulate_targets.R \\
         ${num_simulations} \\
-        simulated_targets
+        simulated_targets \\
+        ${wes_utr_targets} \\
+        ${high_confidence_targets}
     """
 }

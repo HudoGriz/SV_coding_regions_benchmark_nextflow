@@ -10,14 +10,17 @@ include { GATHER_STATISTICS } from '../modules/local/gather_statistics'
 
 workflow ANALYSIS_AND_PLOTS {
     take:
-    ch_truvari_results      // channel: Truvari benchmark results
+    ch_truvari_results      // channel: Truvari benchmark results [meta, summary.json]
     ch_run_dir              // channel: Run directory with all results
 
     main:
     //
-    // Collect all Truvari results
+    // Extract just the summary.json files from the [meta, summary.json] tuples
+    // then collect all results into a single list
     //
-    ch_collected_results = ch_truvari_results.collect()
+    ch_collected_results = ch_truvari_results
+        .map { meta, summary -> summary }
+        .collect()
 
     //
     // Generate statistics and plots

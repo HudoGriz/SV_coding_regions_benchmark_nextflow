@@ -112,9 +112,6 @@ class WorkflowHelp {
 
         // Check simulation parameters
         if (params.simulate_targets) {
-            if (!params.gencode_gtf) {
-                errors << "Simulation enabled (--simulate_targets) but --gencode_gtf not provided."
-            }
             if (!params.benchmark_vcf) {
                 errors << "Simulation enabled (--simulate_targets) but --benchmark_vcf not provided."
             }

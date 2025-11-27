@@ -28,12 +28,14 @@ args <- commandArgs(trailingOnly = TRUE)
 
 reps <- as.numeric(args[1])
 out_file_path <- args[2]
+wes_utr_targets <- args[3]
+high_confidence_targets <- args[4]
 
 
 simulate_targets <- function(repetition_id) {
     # Import exome and high confidence intervals
-    exome_gr <- import_bed("data/references/exome_utr_gtf.HG002_SVs_Tier1.bed")
-    high_confidence_gr <- import_bed("data/references/HG002_SVs_Tier1_v0.6.bed")
+    exome_gr <- import_bed(wes_utr_targets)
+    high_confidence_gr <- import_bed(high_confidence_targets)
 
     n_splits <- 10
 

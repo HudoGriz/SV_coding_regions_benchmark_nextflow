@@ -20,15 +20,43 @@ This PR polishes the analysis and plotting subworkflow, fixing critical bugs and
 
 ## Problems Solved
 The original code had several issues:
-1. ❌ **paper_plots.R** - Ignored provided arguments, used hardcoded paths
-2. ❌ **general_statistics.R** - No command-line argument handling, hardcoded paths  
-3. ❌ **general_statistics.R** - Called undefined function `get_wgs_stats`
-4. ❌ Both scripts crashed on missing data files
-5. ❌ No error handling for missing directories
-6. ❌ Output directories not created automatically
-7. ❌ Scripts assumed specific directory structure
+1. ❌ **CRITICAL**: `GATHER_STATISTICS` received LinkedHashMap tuples instead of file paths, causing immediate crash
+2. ❌ **paper_plots.R** - Ignored provided arguments, used hardcoded paths
+3. ❌ **general_statistics.R** - No command-line argument handling, hardcoded paths  
+4. ❌ **general_statistics.R** - Called undefined function `get_wgs_stats`
+5. ❌ Both scripts crashed on missing data files
+6. ❌ No error handling for missing directories
+7. ❌ Output directories not created automatically
+8. ❌ Scripts assumed specific directory structure
 
 ## Changes Made
+
+### 🔥 Critical Channel Fix
+
+#### `workflows/analysis_and_plots.nf`
+- ✅ **FIXED**: `GATHER_STATISTICS` was receiving `LinkedHashMap` (metadata tuples) instead of file paths
+- ✅ Added `.map { meta, summary -> summary }` to extract only the `summary.json` files from `[meta, summary.json]` tuples
+- ✅ This transformation happens before `.collect()` to ensure the process receives a list of file paths
+
+**Error Before:**
+```
+ERROR ~ Error executing process > 'ANALYSIS_AND_PLOTS:GATHER_STATISTICS'
+Caused by:
+  Not a valid path value type: java.util.LinkedHashMap ([id:Illumina_WGS, ...])
+```
+
+**Root Cause:** The `ch_truvari_results` channel emits `[meta, summary.json]` tuples from `TRUVARI_BENCH`, but `GATHER_STATISTICS` expects just file paths.
+
+**Solution:**
+```groovy
+// Before - collected the whole tuples
+ch_collected_results = ch_truvari_results.collect()
+
+// After - extract files first, then collect
+ch_collected_results = ch_truvari_results
+    .map { meta, summary -> summary }
+    .collect()
+```
 
 ### 📊 R Scripts Improvements
 
@@ -138,10 +166,11 @@ Found 18 benchmark results
 
 ## Changes Summary
 ```
+ workflows/analysis_and_plots.nf    |   9 +++-
  bin/R/general_statistics.R         | 264 +++++++++++++++++++++++--------------
  bin/R/paper_plots.R                | 179 +++++++++++++++----------
  modules/local/gather_statistics.nf |  31 ++++-
- 3 files changed, 297 insertions(+), 177 deletions(-)
+ 4 files changed, 306 insertions(+), 180 deletions(-)
 ```
 
 ---

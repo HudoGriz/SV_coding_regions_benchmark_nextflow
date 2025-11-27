@@ -224,7 +224,7 @@ workflow {
     //
     // SUBWORKFLOW: Simulation and benchmarking (optional)
     //
-    if (params.simulate_targets && params.gencode_gtf && params.benchmark_vcf) {
+    if (params.simulate_targets && params.benchmark_vcf) {
         // Validate required parameters - check all at once
         def missing_params = []
         if (!params.wes_utr_targets) missing_params << "--wes_utr_targets"
@@ -261,7 +261,7 @@ workflow {
         
         log.info """
         =====================================================
-        Simulation completed: ${params.num_simulations} simulated target sets
+        Simulating ${params.num_simulations} target sets
         =====================================================
         """.stripIndent()
     }

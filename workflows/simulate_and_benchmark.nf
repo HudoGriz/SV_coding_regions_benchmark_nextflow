@@ -13,7 +13,6 @@ workflow SIMULATE_AND_BENCHMARK {
     take:
     ch_fasta                // channel: reference FASTA
     ch_fasta_fai            // channel: reference FAI index
-    ch_gencode_gtf          // channel: GENCODE GTF file
     ch_benchmark_vcf        // channel: truth VCF
     ch_benchmark_vcf_tbi    // channel: truth VCF index
     ch_vcfs                 // channel: [meta, vcf, tbi] - all SV caller VCFs to benchmark
@@ -28,7 +27,6 @@ workflow SIMULATE_AND_BENCHMARK {
     SIMULATE_TARGETS(
         num_simulations,
         ch_fasta,
-        ch_gencode_gtf,
         ch_wes_utr_targets,
         ch_high_confidence_targets
     )

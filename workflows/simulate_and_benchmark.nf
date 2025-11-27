@@ -56,31 +56,35 @@ workflow SIMULATE_AND_BENCHMARK {
         }
 
     //
-    // Prepare input for TRUVARI_BENCH: combine truth VCF+index and FASTA+index into proper format
+    // Prepare input for TRUVARI_BENCH
+    // The module expects: tuple val(meta), path(vcf), path(tbi), path(truth_vcf), path(truth_tbi), path(bed)
+    //                     tuple val(meta2), path(fasta)
+    //                     tuple val(meta3), path(fai)
     //
-    ch_truth_vcf_with_index = ch_benchmark_vcf
-        .combine(ch_benchmark_vcf_tbi)
-        .map { vcf, tbi -> [[id: 'truth'], vcf, tbi] }
     
-    ch_fasta_with_index = ch_fasta
-        .combine(ch_fasta_fai)
-        .map { fasta, fai -> [[id: 'reference'], fasta, fai] }
-
-    //
-    // Remap bench input to match nf-core module expectations
-    //
+    // Combine benchmark VCF with FASTA to create inputs for all samples
     ch_truvari_input = ch_bench_input
-        .map { meta, vcf, tbi, bed ->
-            [meta, vcf, tbi, bed]
+        .combine(ch_benchmark_vcf)
+        .combine(ch_benchmark_vcf_tbi)
+        .map { meta, vcf, tbi, bed, truth_vcf, truth_tbi ->
+            [meta, vcf, tbi, truth_vcf, truth_tbi, bed]
         }
+
+    // Prepare FASTA channel (without meta since module expects just path)
+    ch_fasta_input = ch_fasta
+        .map { fasta -> [[id: 'reference'], fasta] }
+    
+    // Prepare FAI channel (without meta since module expects just path)
+    ch_fai_input = ch_fasta_fai
+        .map { fai -> [[id: 'reference_index'], fai] }
 
     //
     // Run Truvari benchmarking on simulated targets
     //
     TRUVARI_BENCH(
         ch_truvari_input,
-        ch_truth_vcf_with_index,
-        ch_fasta_with_index
+        ch_fasta_input,
+        ch_fai_input
     )
 
     emit:

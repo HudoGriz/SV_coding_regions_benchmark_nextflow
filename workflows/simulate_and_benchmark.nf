@@ -45,9 +45,19 @@ workflow SIMULATE_AND_BENCHMARK {
         }
 
     //
+    // Filter out Illumina WES from simulation benchmarking
+    // WES data is already restricted to exome regions, so benchmarking against
+    // simulated exome-like regions would be redundant
+    //
+    ch_vcfs_for_simulation = ch_vcfs
+        .filter { meta, vcf, tbi ->
+            meta.technology != 'Illumina_WES'
+        }
+
+    //
     // Combine VCFs with simulated target BEDs for benchmarking
     //
-    ch_bench_input = ch_vcfs
+    ch_bench_input = ch_vcfs_for_simulation
         .combine(ch_simulated_beds)
         .map { vcf_meta, vcf, tbi, bed_meta, bed ->
             def combined_meta = vcf_meta + bed_meta

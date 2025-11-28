@@ -3,8 +3,8 @@ process GATHER_STATISTICS {
     label 'process_low'
 
     input:
-    val ready  // Signal that truvari results are ready
-    path run_dir
+    val ready    // Signal that truvari results are ready
+    val run_dir  // Path to results directory (as string, not staged)
 
     output:
     path "plots/*", emit: plots, optional: true

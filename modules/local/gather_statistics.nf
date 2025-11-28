@@ -1,7 +1,6 @@
 process GATHER_STATISTICS {
     tag "gathering statistics and generating plots"
     label 'process_low'
-    publishDir "${params.outdir}/statistics", mode: 'copy'
 
     input:
     val ready  // Signal that truvari results are ready

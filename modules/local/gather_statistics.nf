@@ -9,8 +9,7 @@ process GATHER_STATISTICS {
     path "plots/*", emit: plots, optional: true
     path "tables/*", emit: tables, optional: true
     path "summary_statistics.txt", emit: summary
-    path "real_intervals/**", emit: real_intervals, optional: true
-    path "simulated_intervals/**", emit: simulated_intervals, optional: true
+    path "truvari_results/*", emit: truvari_results, optional: true
 
     when:
     params.gather_statistics
@@ -72,8 +71,26 @@ process GATHER_STATISTICS {
     }
     
     echo ""
+    echo "=== Collecting Truvari Results with New Naming ==="
+    mkdir -p truvari_results
+    
+    # Copy all Truvari result files to a flat directory for easy access
+    # The files already have the new naming scheme (Technology-Tool-Target.*)
+    find real_intervals simulated_intervals -type f \\( \\
+        -name "*.summary.json" -o \\
+        -name "*.fn.vcf.gz" -o \\
+        -name "*.fp.vcf.gz" -o \\
+        -name "*.tp-base.vcf.gz" -o \\
+        -name "*.tp-comp.vcf.gz" -o \\
+        -name "*.tbi" -o \\
+        -name "*.log.txt" \\
+    \\) -exec cp {} truvari_results/ \\; 2>/dev/null || true
+    
+    echo "Copied \$(ls truvari_results/ 2>/dev/null | wc -l) Truvari files to truvari_results/"
+    
+    echo ""
     echo "=== Analysis Complete ==="
     echo "Generated files:"
-    ls -lh plots/ tables/ summary_statistics.txt 2>/dev/null || echo "Some output directories may be empty"
+    ls -lh plots/ tables/ summary_statistics.txt truvari_results/ 2>/dev/null || echo "Some output directories may be empty"
     """
 }

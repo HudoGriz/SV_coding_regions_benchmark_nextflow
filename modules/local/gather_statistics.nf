@@ -4,7 +4,7 @@ process GATHER_STATISTICS {
     publishDir "${params.outdir}/statistics", mode: 'copy'
 
     input:
-    path truvari_results
+    val ready  // Signal that truvari results are ready
     path run_dir
 
     output:
@@ -23,6 +23,7 @@ process GATHER_STATISTICS {
     echo "=== Starting Analysis and Plots Generation ==="
     echo "Run directory: ${run_dir}"
     echo "Working directory: \$(pwd)"
+    echo "Processing ${ready} Truvari benchmark results"
     echo ""
     
     # Create output directories

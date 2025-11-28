@@ -15,18 +15,19 @@ workflow ANALYSIS_AND_PLOTS {
 
     main:
     //
-    // Extract just the summary.json files from the [meta, summary.json] tuples
-    // then collect all results into a single list
+    // Wait for all Truvari results to complete, then emit a ready signal
+    // We don't need to stage the files since R scripts read directly from run_dir
     //
-    ch_collected_results = ch_truvari_results
-        .map { meta, summary -> summary }
-        .collect()
+    ch_ready = ch_truvari_results
+        .map { meta, summary -> 1 }  // Convert to simple counter
+        .collect()                    // Collect all results
+        .map { it.size() }            // Return count as ready signal
 
     //
     // Generate statistics and plots
     //
     GATHER_STATISTICS(
-        ch_collected_results,
+        ch_ready,
         ch_run_dir
     )
 

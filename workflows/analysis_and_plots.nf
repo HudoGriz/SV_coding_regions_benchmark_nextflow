@@ -28,15 +28,10 @@ workflow ANALYSIS_AND_PLOTS {
                 "simulated_intervals/benchmarks/${meta.technology}/${meta.tool}/${meta.target}" :
                 "real_intervals/${meta.technology}/truvari/${meta.tool}/${meta.target}"
             
-            tuple(stage_path, result_dir)
+            // Return a map with metadata for easier processing
+            [stage_path: stage_path, result_dir: result_dir]
         }
         .collect()
-        .map { list_of_tuples ->
-            // Separate paths and directories for input staging
-            def paths = list_of_tuples.collect { it[0] }
-            def dirs = list_of_tuples.collect { it[1] }
-            tuple(paths, dirs)
-        }
 
     //
     // Generate statistics and plots

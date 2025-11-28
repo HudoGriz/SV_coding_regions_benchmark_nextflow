@@ -1,16 +1,25 @@
 #!/usr/bin/env Rscript
 
-# Get the first command-line argument
+# Get command-line arguments
 args <- commandArgs(trailingOnly = TRUE)
 
-# Check if at least one argument was provided
-if (length(args) == 0) {
-    stop("No arguments provided. Please provide at least one argument.", call. = FALSE)
+# Check if correct number of arguments was provided
+if (length(args) < 3) {
+    stop("Usage: Rscript paper_plots.R <run_dir> <plots_dir> <tables_dir>", call. = FALSE)
 }
 
-# Extract and use the first argument
-run_name <- args[1]
-cat("The run name is:", run_name, "\n")
+# Extract arguments
+run_dir <- args[1]
+plots_dir <- args[2]
+tables_dir <- args[3]
+
+cat("Run directory:", run_dir, "\n")
+cat("Plots directory:", plots_dir, "\n")
+cat("Tables directory:", tables_dir, "\n")
+
+# Create output directories if they don't exist
+dir.create(plots_dir, showWarnings = FALSE, recursive = TRUE)
+dir.create(tables_dir, showWarnings = FALSE, recursive = TRUE)
 
 library(ggplot2)
 library(jsonlite)
@@ -112,33 +121,48 @@ get_mean_stats <- function(stats_all, throw_away = c()) {
 
 
 # Get json data from Truvari
-# path_truvari <- paste0(paths, "/truvari_benchmark")
-path_truvari <- paste0(run_name, "/real_intervals")
+path_truvari <- paste0(run_dir, "/real_intervals")
 json_files <- list.files(path = path_truvari, pattern = "*summary.json$", full.names = TRUE, recursive = TRUE)
-json_files <- name_files_after_path(json_files, name_after_path = c(3, 5, 6), file_extension = "json")
-truvari_stats <- get_truvari_stats(json_files)
 
-
-get_mean_stats(truvari_stats$data_long)
-get_mean_stats(truvari_stats$data_long, throw_away = "Illumina_wes")
-
-# save as tsv
-write.table(truvari_stats$wgs_stats, paste0(run_name, "/stats/truvari_metrics_real_intervals.tsv"), sep = "\t", row.names = FALSE)
+if (length(json_files) == 0) {
+    cat("Warning: No real intervals summary.json files found in", path_truvari, "\n")
+    cat("Skipping real intervals analysis\n")
+    truvari_stats <- NULL
+} else {
+    json_files <- name_files_after_path(json_files, name_after_path = c(3, 5, 6), file_extension = "json")
+    truvari_stats <- get_truvari_stats(json_files)
+    
+    get_mean_stats(truvari_stats$data_long)
+    get_mean_stats(truvari_stats$data_long, throw_away = "Illumina_wes")
+    
+    # save as tsv
+    write.table(truvari_stats$wgs_stats, 
+                file.path(tables_dir, "truvari_metrics_real_intervals.tsv"), 
+                sep = "\t", row.names = FALSE)
+}
 
 
 ### Simulated targets analysis
-path_truvari <- paste0(run_name, "/simulated_intervals/benchmarks")
+path_truvari <- paste0(run_dir, "/simulated_intervals/benchmarks")
 json_files <- list.files(path = path_truvari, pattern = "*summary.json$", full.names = TRUE, recursive = TRUE)
-json_files <- name_files_after_path(json_files, name_after_path = c(4, 5, 7, 8), file_extension = "json")
-truvari_stats_sim <- get_truvari_stats(json_files)
 
-# Remove all simulations with no calls
-simulations_long <- truvari_stats_sim$data_long
-invalid_sims <- unique(simulations_long$data_name[is.na(simulations_long$Value)])
-simulations_long <- simulations_long[!simulations_long$data_name %in% invalid_sims, ]
-simulations_long$data_name <- sub("^[^_]+_", "", simulations_long$data_name)
-
-simulations_long <- simulations_long[!grepl("Illumina_wes", simulations_long$data_name), ]
+if (length(json_files) == 0) {
+    cat("Warning: No simulated intervals summary.json files found in", path_truvari, "\n")
+    cat("Skipping simulated intervals analysis\n")
+    simulations_long <- NULL
+    real_data <- NULL
+} else {
+    json_files <- name_files_after_path(json_files, name_after_path = c(4, 5, 7, 8), file_extension = "json")
+    truvari_stats_sim <- get_truvari_stats(json_files)
+    
+    # Remove all simulations with no calls
+    simulations_long <- truvari_stats_sim$data_long
+    invalid_sims <- unique(simulations_long$data_name[is.na(simulations_long$Value)])
+    simulations_long <- simulations_long[!simulations_long$data_name %in% invalid_sims, ]
+    simulations_long$data_name <- sub("^[^_]+_", "", simulations_long$data_name)
+    
+    simulations_long <- simulations_long[!grepl("Illumina_wes", simulations_long$data_name), ]
+}
 
 
 kde <- function(data, test_point) {
@@ -159,10 +183,11 @@ kde <- function(data, test_point) {
     return(outlier_prob)
 }
 
+# Only run simulation vs real comparison if both datasets exist
+if (!is.null(simulations_long) && !is.null(truvari_stats)) {
+    data_names <- unique(simulations_long$data_name)
 
-data_names <- unique(simulations_long$data_name)
-
-match_stats <- sapply(data_names, function(data_name) {
+    match_stats <- sapply(data_names, function(data_name) {
     simulations_long_sub <- simulations_long[simulations_long$data_name == data_name, ]
     real_long_sub <- truvari_stats$data_long[truvari_stats$data_long$data_name == data_name, ]
 
@@ -212,12 +237,17 @@ match_stats <- sapply(data_names, function(data_name) {
     )
 })
 
-match_stats <- data.frame(t(match_stats))
-
-formatted_match_stats <- format(match_stats, scientific=F)
-
-# save as tsv
-write.table(formatted_match_stats, paste0(run_name, "/stats/truvari_metrics_simulated_intervals.tsv"), sep = "\t", row.names = TRUE)
+    match_stats <- data.frame(t(match_stats))
+    
+    formatted_match_stats <- format(match_stats, scientific=F)
+    
+    # save as tsv
+    write.table(formatted_match_stats, 
+                file.path(tables_dir, "truvari_metrics_simulated_intervals.tsv"), 
+                sep = "\t", row.names = TRUE)
+} else {
+    cat("Skipping simulation vs real comparison (missing data)\n")
+}
 
 
 # New plots:
@@ -244,12 +274,14 @@ annotate_data <- function(plot_data) {
     return(plot_data)
 }
 
-real_data <- annotate_data(truvari_stats$data_long)
-sim_data <- annotate_data(simulations_long)
+# Generate plots only if we have data
+if (!is.null(truvari_stats) && !is.null(simulations_long)) {
+    real_data <- annotate_data(truvari_stats$data_long)
+    sim_data <- annotate_data(simulations_long)
 
 
-# Box plot
-real_data_exutr <- real_data[real_data$ranges == "EX+UTR", ]
+    # Box plot
+    real_data_exutr <- real_data[real_data$ranges == "EX+UTR", ]
 real_data_exutr <- real_data_exutr[real_data_exutr$caller != "WES Manta", ]
 real_data_exutr$tech_caller <- paste(real_data_exutr$tech, real_data_exutr$caller, sep = " ")
 real_data_exutr$ranges_true <- "Simulated EX+UTR-like regions"
@@ -312,10 +344,10 @@ p11 <- ggplot(long_df, aes(x = tech_caller, y = Value, fill = tech_caller)) +
     xlab(NULL)
 
     # Save the plot
-ggsave(
-    paste0(run_name, "/stats/bar_plot_sim_diff.png"),
-    p11, width = 10, height = 6, units = "in", dpi = 300, bg = 'white'
-)
+    ggsave(
+        file.path(plots_dir, "bar_plot_sim_diff.png"),
+        p11, width = 10, height = 6, units = "in", dpi = 300, bg = 'white'
+    )
 
 
 # Faced boxplot for simulated data and real data in EX+UTR region
@@ -354,32 +386,37 @@ p2 <- ggplot() +
     scale_x_discrete(breaks = NULL) +
     xlab(NULL)
 
-ggsave(
-    paste0(run_name, "/stats/facets_plot.png"),
-    p2, width = 10, height = 6, units = "in", dpi = 300, bg = 'white'
+    ggsave(
+        file.path(plots_dir, "facets_plot.png"),
+        p2, width = 10, height = 6, units = "in", dpi = 300, bg = 'white'
     )
-
-
-# Facet plot WGS???
-real_data_wgs <- real_data[real_data$caller %in% c("WES Manta", "WGS Manta", "Sniffles", "Pbsv", "CuteSV"), ]
-real_data_wgs$tech_caller <- paste(real_data_wgs$tech, real_data_wgs$caller, sep = " ")
-
-p3 <- ggplot(real_data_wgs, aes(x = ranges, y = Value, fill = tech_caller)) +
-    geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
-    facet_grid(. ~ Metric, scales = "free_x", space = "free_x") +
-    scale_fill_manual(values = my_colors) +
-    theme_linedraw() +
-    theme(
-        strip.text = element_text(size = 10, face = "bold")
-    ) +
-    labs(
-        title = "Structural Variant Detection Metrics",
-        y = "Metric Value",
-        fill = "SV Caller"
-    ) +
-    guides(fill = guide_legend(title = "SV Caller"))
-
-ggsave(
-    paste0(run_name, "/stats/bar_plot.png"),
-    p3, width = 10, height = 6, units = "in", dpi = 300, bg = 'white'
+    
+    
+    # Facet plot WGS???
+    real_data_wgs <- real_data[real_data$caller %in% c("WES Manta", "WGS Manta", "Sniffles", "Pbsv", "CuteSV"), ]
+    real_data_wgs$tech_caller <- paste(real_data_wgs$tech, real_data_wgs$caller, sep = " ")
+    
+    p3 <- ggplot(real_data_wgs, aes(x = ranges, y = Value, fill = tech_caller)) +
+        geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
+        facet_grid(. ~ Metric, scales = "free_x", space = "free_x") +
+        scale_fill_manual(values = my_colors) +
+        theme_linedraw() +
+        theme(
+            strip.text = element_text(size = 10, face = "bold")
+        ) +
+        labs(
+            title = "Structural Variant Detection Metrics",
+            y = "Metric Value",
+            fill = "SV Caller"
+        ) +
+        guides(fill = guide_legend(title = "SV Caller"))
+    
+    ggsave(
+        file.path(plots_dir, "bar_plot.png"),
+        p3, width = 10, height = 6, units = "in", dpi = 300, bg = 'white'
     )
+} else {
+    cat("Skipping plots (missing real or simulated data)\n")
+}
+
+cat("\nAnalysis complete!\n")

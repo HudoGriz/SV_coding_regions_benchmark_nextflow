@@ -270,12 +270,8 @@ workflow {
     // SUBWORKFLOW: Analysis and plots (optional)
     //
     if (params.gather_statistics && (params.benchmark_vcf && !params.skip_benchmarking)) {
-        // Collect run directory
-        ch_run_dir = Channel.value(file(params.outdir))
-        
         ANALYSIS_AND_PLOTS(
-            ch_truvari_results,
-            ch_run_dir
+            ch_truvari_results
         )
         
         log.info """

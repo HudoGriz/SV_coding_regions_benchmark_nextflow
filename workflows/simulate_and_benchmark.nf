@@ -62,6 +62,8 @@ workflow SIMULATE_AND_BENCHMARK {
         .map { vcf_meta, vcf, tbi, bed_meta, bed ->
             def combined_meta = vcf_meta + bed_meta
             combined_meta.id = "${vcf_meta.id}_${bed_meta.id}"
+            // Set target to the simulation ID for proper file naming
+            combined_meta.target = bed_meta.id
             [combined_meta, vcf, tbi, bed]
         }
 

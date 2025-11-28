@@ -1,7 +1,6 @@
 process SIMULATE_TARGETS {
     tag "simulating ${num_simulations} target regions"
     label 'process_high'
-    publishDir "${params.outdir}/simulations/target_regions", mode: 'copy'
     
     input:
     val num_simulations

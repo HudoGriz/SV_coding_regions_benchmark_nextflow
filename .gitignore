@@ -4,6 +4,8 @@
 work/
 results/
 benchmarking_run/
+test_results/
+test_results_*/
 
 # Python
 __pycache__/

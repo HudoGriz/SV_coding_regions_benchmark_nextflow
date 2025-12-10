@@ -7,6 +7,16 @@ benchmarking_run/
 test_results/
 test_results_*/
 
+# Nextflow output artifacts
+dag.dot
+dag.html
+dag.svg
+timeline.html
+report.html
+trace.txt
+*.html
+*.svg
+
 # Python
 __pycache__/
 *.py[cod]

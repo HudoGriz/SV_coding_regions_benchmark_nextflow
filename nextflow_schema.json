@@ -53,7 +53,7 @@
                     "description": "Path to Oxford Nanopore BAM file (optional)",
                     "help_text": "Oxford Nanopore long-read BAM file for long-read SV calling."
                 },
-                "benchmark_vcf": {
+                "vcf_baseline": {
                     "type": "string",
                     "format": "file-path",
                     "exists": true,
@@ -96,7 +96,7 @@
                     "help_text": "BED file with tandem repeat regions for filtering or annotation."
                 }
             },
-            "required": ["fasta", "benchmark_vcf"]
+            "required": ["fasta", "vcf_baseline"]
         },
         "tool_control": {
             "title": "Tool Control",
@@ -159,59 +159,7 @@
                 }
             }
         },
-        "data_preparation": {
-            "title": "Data Preparation",
-            "type": "object",
-            "description": "Parameters for automatic data download and preparation",
-            "default": "",
-            "properties": {
-                "prepare_giab_resources": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Download GIAB truth sets and annotations only",
-                    "help_text": "Minimal data preparation: downloads truth VCF and annotations."
-                },
-                "prepare_complete_data": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Download complete dataset including BAM files",
-                    "help_text": "Full data preparation: downloads reference, BAMs, truth sets, and annotations."
-                },
-                "genome": {
-                    "type": "string",
-                    "default": "hs37d5",
-                    "enum": ["hs37d5", "GRCh37", "GRCh38"],
-                    "description": "Reference genome version for data preparation",
-                    "help_text": "Choose genome version when using prepare_complete_data."
-                },
-                "skip_singularity_download": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Skip downloading Singularity containers (GRCh37 only)"
-                },
-                "skip_bam_download": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Skip downloading BAM files"
-                },
-                "skip_reference_download": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Skip downloading reference genome"
-                },
-                "download_grch37_liftover": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Download GRCh37 liftover truth sets (GRCh38 only)"
-                },
-                "project_dir": {
-                    "type": "string",
-                    "format": "directory-path",
-                    "default": "${projectDir}",
-                    "description": "Project directory for data preparation outputs"
-                }
-            }
-        },
+
         "truvari_parameters": {
             "title": "Truvari Benchmarking Parameters",
             "type": "object",
@@ -232,7 +180,7 @@
                 },
                 "truvari_pctseq": {
                     "type": "number",
-                    "default": 0.7,
+                    "default": 0.0,
                     "description": "Minimum percent sequence similarity (0-1)",
                     "help_text": "Variants must have at least this percent sequence similarity to be matched."
                 },
@@ -241,16 +189,6 @@
                     "default": 0.0,
                     "description": "Minimum percent reciprocal overlap (0-1)",
                     "help_text": "Variants must have at least this percent reciprocal overlap to be matched."
-                },
-                "truvari_passonly": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Only consider variants with PASS filter"
-                },
-                "truvari_multimatch": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Allow base variants to match multiple comparison variants"
                 }
             }
         },
@@ -263,21 +201,35 @@
                 "outdir": {
                     "type": "string",
                     "format": "directory-path",
-                    "default": "./results",
+                    "default": "${launchDir}/${run_name}",
                     "description": "Output directory for results",
-                    "help_text": "The output directory where the results will be saved."
+                    "help_text": "The output directory where the results will be saved. Defaults to launch directory with run name."
                 },
                 "run_name": {
                     "type": "string",
-                    "default": "sv_benchmark",
+                    "default": "benchmarking_run",
                     "description": "Name for this pipeline run",
-                    "help_text": "Used to name output files and reports."
+                    "help_text": "Used to name output directory and reports."
                 },
                 "publish_dir_mode": {
                     "type": "string",
                     "default": "copy",
                     "enum": ["copy", "symlink", "link"],
                     "description": "Method for publishing output files"
+                }
+            }
+        },
+        "conda_options": {
+            "title": "Conda Options",
+            "type": "object",
+            "description": "Conda environment configuration",
+            "default": "",
+            "properties": {
+                "conda_cache_dir": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "description": "Directory for conda environment cache",
+                    "help_text": "Location where conda environments will be cached for reuse."
                 }
             }
         },
@@ -344,9 +296,9 @@
         {"$ref": "#/definitions/tool_control"},
         {"$ref": "#/definitions/simulation_parameters"},
         {"$ref": "#/definitions/analysis_parameters"},
-        {"$ref": "#/definitions/data_preparation"},
         {"$ref": "#/definitions/truvari_parameters"},
         {"$ref": "#/definitions/output_parameters"},
+        {"$ref": "#/definitions/conda_options"},
         {"$ref": "#/definitions/generic_options"},
         {"$ref": "#/definitions/resource_limits"}
     ]

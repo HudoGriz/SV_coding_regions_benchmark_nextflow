@@ -11,21 +11,6 @@ nextflow.enable.dsl=2
 ----------------------------------------------------------------------------------------
 */
 
-// Import helper functions
-import WorkflowHelp
-
-// Show help message if requested
-if (params.help) {
-    log.info WorkflowHelp.helpMessage()
-    exit 0
-}
-
-// Validate parameters
-WorkflowHelp.validateParameters(params, log)
-
-// Print pipeline information
-WorkflowHelp.logPipelineInfo(params, log)
-
 /*
 ========================================================================================
     IMPORT MODULES AND WORKFLOWS
@@ -38,9 +23,6 @@ include { SV_CALLING } from './workflows/sv_calling'
 include { BENCHMARKING } from './workflows/benchmarking'
 include { SIMULATE_AND_BENCHMARK } from './workflows/simulate_and_benchmark'
 include { ANALYSIS_AND_PLOTS } from './workflows/analysis_and_plots'
-include { PREPARE_GIAB_RESOURCES } from './workflows/prepare_giab_resources'
-include { PREPARE_DATA_COMPLETE_GRCH37 } from './workflows/preparation/prepare_data_complete_grch37'
-include { PREPARE_DATA_COMPLETE_GRCH38 } from './workflows/preparation/prepare_data_complete_grch38'
 
 /*
 ========================================================================================
@@ -50,91 +32,63 @@ include { PREPARE_DATA_COMPLETE_GRCH38 } from './workflows/preparation/prepare_d
 
 workflow {
     
-    //
-    // SUBWORKFLOW: Prepare GIAB resources (optional - minimal)
-    //
-    if (params.prepare_giab_resources && !params.prepare_complete_data) {
-        PREPARE_GIAB_RESOURCES()
-        
-        log.info """
+    // Show help message if requested
+    if (params.help) {
+        def helpMessage = """
         =====================================================
-        GIAB resources prepared. Outputs available at:
-        - Truth VCF: ${params.project_dir}/data/HG002_references/
-        - Annotations: ${params.project_dir}/data/references/
+        SV CALLING AND BENCHMARKING PIPELINE
+        =====================================================
+        
+        Usage:
+          nextflow run main.nf -profile <profile> [options]
+        
+        Required Arguments:
+          --fasta                Reference genome FASTA file
+        
+        Input BAM Files (at least one required):
+          --illumina_wes_bam     Illumina WES BAM file
+          --illumina_wgs_bam     Illumina WGS BAM file
+          --pacbio_bam           PacBio BAM file
+          --ont_bam              Oxford Nanopore BAM file
+        
+        Benchmarking (optional):
+          --benchmark_vcf        Truth VCF for benchmarking
+          --skip_benchmarking    Skip Truvari benchmarking (default: false)
+          --high_confidence_targets  BED file with high confidence regions
+          --gene_panel_targets   BED file with gene panel regions
+          --wes_utr_targets      BED file with WES UTR regions
+        
+        Optional Arguments:
+          --outdir               Output directory (default: results)
+          --run_name             Run name (default: benchmarking_run)
+          --tandem_repeats       Tandem repeats BED file (for Sniffles)
+          
+        Simulation Options:
+          --simulate_targets     Enable target region simulation (default: false)
+          --num_simulations      Number of simulations to run (default: 100)
+          --gencode_gtf          GENCODE GTF annotation file for simulation
+          
+        Analysis Options:
+          --gather_statistics    Generate statistics and plots (default: false)
+        
+        Profiles:
+          test_nfcore            Run with nf-core test data
+          test                   Run with minimal test data
+          docker                 Use Docker containers
+          singularity            Use Singularity containers
         =====================================================
         """.stripIndent()
-    }
-    
-    //
-    // SUBWORKFLOW: Complete data preparation (optional - includes everything)
-    //
-    if (params.prepare_complete_data) {
-        if (params.genome == 'hs37d5' || params.genome == 'GRCh37') {
-            PREPARE_DATA_COMPLETE_GRCH37(
-                params.skip_singularity_download,
-                params.skip_bam_download,
-                params.skip_reference_download
-            )
-            
-            log.info """
-            =====================================================
-            Complete GRCh37 data preparation finished!
-            
-            Downloaded:
-            ${params.skip_singularity_download ? '  ✓ Singularity containers (skipped)' : '  ✓ Singularity containers'}
-            ${params.skip_bam_download ? '  ✓ BAM files (skipped)' : '  ✓ BAM files (Illumina WES, WGS, PacBio, ONT)'}
-            ${params.skip_reference_download ? '  ✓ Reference genome (skipped)' : '  ✓ Reference genome (hs37d5)'}
-              ✓ GIAB truth sets (v0.6)
-              ✓ Annotations (tandem repeats, GENCODE v19)
-              ✓ Target BED files (exome+UTR)
-            
-            Outputs location: ${params.project_dir}/data/
-            =====================================================
-            """.stripIndent()
-            
-        } else if (params.genome == 'GRCh38') {
-            PREPARE_DATA_COMPLETE_GRCH38(
-                params.skip_bam_download,
-                params.skip_reference_download,
-                params.download_grch37_liftover
-            )
-            
-            log.info """
-            =====================================================
-            Complete GRCh38 data preparation finished!
-            
-            Downloaded:
-            ${params.skip_bam_download ? '  ✓ BAM files (skipped)' : '  ✓ BAM files (Illumina WGS, PacBio, ONT)'}
-            ${params.skip_reference_download ? '  ✓ Reference genome (skipped)' : '  ✓ Reference genome (GRCh38 no alt)'}
-              ✓ GIAB truth sets (T2TQ100-V1.0)
-            ${params.download_grch37_liftover ? '  ✓ GIAB GRCh37 liftover truth sets' : ''}
-              ✓ Annotations (tandem repeats, GENCODE v49)
-              ✓ Target BED files (exome+UTR)
-            
-            Outputs location: ${params.project_dir}/data/
-            =====================================================
-            """.stripIndent()
-            
-        } else {
-            error "Unsupported genome: ${params.genome}. Use 'hs37d5', 'GRCh37', or 'GRCh38'"
-        }
         
-        // Exit after preparation if no input BAMs specified
-        if (!params.illumina_wes_bam && !params.illumina_wgs_bam && !params.pacbio_bam && !params.ont_bam) {
-            log.info "Data preparation complete. Exiting (no input BAMs specified for SV calling)."
-            return
-        }
+        log.info helpMessage
+        return
     }
     
     //
     // Validate input parameters for SV calling workflow
     //
     
-    // Check if running SV calling mode (not just data preparation)
-    def running_sv_calling = !params.prepare_giab_resources && !params.prepare_complete_data
-    
-    // Exit early if no BAMs provided and not in preparation mode
-    if (running_sv_calling && !params.illumina_wes_bam && !params.illumina_wgs_bam && !params.pacbio_bam && !params.ont_bam) {
+    // Exit early if no BAMs provided
+    if (!params.illumina_wes_bam && !params.illumina_wgs_bam && !params.pacbio_bam && !params.ont_bam) {
         log.error """
         =====================================================
         ERROR: No input BAM files specified!
@@ -144,43 +98,37 @@ workflow {
           --illumina_wgs_bam <path>  Illumina WGS BAM
           --pacbio_bam <path>        PacBio BAM
           --ont_bam <path>           Oxford Nanopore BAM
-        
-        Or run data preparation mode:
-          --prepare_giab_resources   Prepare minimal GIAB resources
-          --prepare_complete_data    Prepare complete dataset
         =====================================================
         """.stripIndent()
         
-        System.exit(1)
+        error("No input BAM files specified")
     }
     
     // Log which technologies are being analyzed
-    if (running_sv_calling) {
-        def technologies = []
-        if (params.illumina_wes_bam) technologies << "Illumina WES (Manta)"
-        if (params.illumina_wgs_bam) technologies << "Illumina WGS (Manta)"
-        if (params.pacbio_bam) {
-            if (params.skip_pbsv) {
-                technologies << "PacBio (CuteSV only - PBSV skipped)"
-            } else {
-                technologies << "PacBio (CuteSV, PBSV)"
-            }
+    def technologies = []
+    if (params.illumina_wes_bam) technologies << "Illumina WES (Manta)"
+    if (params.illumina_wgs_bam) technologies << "Illumina WGS (Manta)"
+    if (params.pacbio_bam) {
+        if (params.skip_pbsv) {
+            technologies << "PacBio (CuteSV only - PBSV skipped)"
+        } else {
+            technologies << "PacBio (CuteSV, PBSV)"
         }
-        if (params.ont_bam) technologies << "ONT (CuteSV, Sniffles)"
-        
-        log.info """
-        =====================================================
-        SV CALLING ANALYSIS
-        
-        Technologies to analyze:
-        ${technologies.collect { "  ✓ ${it}" }.join('\n')}
-        
-        ${!params.illumina_wes_bam && !params.illumina_wgs_bam ? '  ✗ Illumina (no BAM provided - skipping)' : ''}
-        ${!params.pacbio_bam ? '  ✗ PacBio (no BAM provided - skipping)' : ''}
-        ${!params.ont_bam ? '  ✗ ONT (no BAM provided - skipping)' : ''}
-        =====================================================
-        """.stripIndent()
     }
+    if (params.ont_bam) technologies << "ONT (CuteSV, Sniffles)"
+    
+    log.info """
+    =====================================================
+    SV CALLING ANALYSIS
+    
+    Technologies to analyze:
+    ${technologies.collect { "  ✓ ${it}" }.join('\n')}
+    
+    ${!params.illumina_wes_bam && !params.illumina_wgs_bam ? '  ✗ Illumina (no BAM provided - skipping)' : ''}
+    ${!params.pacbio_bam ? '  ✗ PacBio (no BAM provided - skipping)' : ''}
+    ${!params.ont_bam ? '  ✗ ONT (no BAM provided - skipping)' : ''}
+    =====================================================
+    """.stripIndent()
     
     //
     // SUBWORKFLOW: Prepare references
@@ -280,19 +228,17 @@ workflow {
         =====================================================
         """.stripIndent()
     }
-}
-
-/*
-========================================================================================
-    WORKFLOW COMPLETION
-========================================================================================
-*/
-
-workflow.onComplete {
-    log.info """\
+    
+    /*
+    ========================================================================================
+        WORKFLOW COMPLETION HANDLER
+    ========================================================================================
+    */
+    workflow.onComplete = {
+        log.info """
         Pipeline completed at: ${workflow.complete}
         Execution status: ${workflow.success ? 'OK' : 'failed'}
         Execution duration: ${workflow.duration}
-        """
-        .stripIndent()
+        """.stripIndent()
+    }
 }

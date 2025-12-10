@@ -43,5 +43,5 @@ workflow ANALYSIS_AND_PLOTS {
     emit:
     plots = GATHER_STATISTICS.out.plots
     tables = GATHER_STATISTICS.out.tables
-    summary = GATHER_STATISTICS.out.summary
+    // summary = GATHER_STATISTICS.out.summary  // Commented out - not currently generated
 }

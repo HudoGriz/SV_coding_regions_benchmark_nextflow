@@ -7,7 +7,7 @@ import_bed <- function(file_path, mcols = FALSE) {
     bed <- read.table(file_path, header = FALSE, sep = "\t", stringsAsFactors = FALSE)
     
     gr <- GRanges(
-        seqnames = gsub("chr", "", bed[[1]]),
+        seqnames = bed[[1]],
         ranges = IRanges(start = bed[[2]], end = bed[[3]]),
         strand = "*"
     )
@@ -92,8 +92,17 @@ simulate_targets <- function(repetition_id) {
 
     # Save the simulated targets for the current repetition
     output_file <- file.path(paste0(out_file_path, "/simulation", repetition_id, ".bed"))
+    
+    # Prepare output data frame
+    output_df <- data.frame(
+        seqnames = as.character(seqnames(all_chunks)),
+        start = start(all_chunks),
+        end = end(all_chunks),
+        stringsAsFactors = FALSE
+    )
+    
     write.table(
-        all_chunks,
+        output_df,
         output_file,
         sep = "\t",
         row.names = FALSE,

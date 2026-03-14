@@ -135,13 +135,6 @@
                     "default": 100,
                     "description": "Number of simulations to run",
                     "help_text": "Number of random target sets to generate and benchmark."
-                },
-                "gencode_gtf": {
-                    "type": "string",
-                    "format": "file-path",
-                    "exists": true,
-                    "description": "Path to GENCODE GTF annotation file (required for simulation)",
-                    "help_text": "GTF file with gene annotations for extracting gene coordinates."
                 }
             }
         },

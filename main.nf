@@ -66,7 +66,6 @@ workflow {
         Simulation Options:
           --simulate_targets     Enable target region simulation (default: false)
           --num_simulations      Number of simulations to run (default: 100)
-          --gencode_gtf          GENCODE GTF annotation file for simulation
           
         Analysis Options:
           --gather_statistics    Generate statistics and plots (default: false)

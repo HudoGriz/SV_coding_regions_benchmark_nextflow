@@ -132,7 +132,6 @@ At least one BAM file must be provided.
 | `simulate_targets` | `false` | Enable simulated interval analysis |
 | `num_simulations` | `100` | Number of simulated interval sets to generate |
 | `gather_statistics` | `false` | Generate publication plots and statistics tables |
-| `gencode_gtf` | `null` | GENCODE GTF (used by preparation scripts only) |
 
 ### Truvari Parameters
 

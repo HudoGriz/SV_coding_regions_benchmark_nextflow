@@ -2,7 +2,7 @@ library(parallel)
 library(rtracklayer)
 library(GenomicRanges)
 
-# Import function from general_functions.R
+# Import BED file as GRanges object
 import_bed <- function(file_path, mcols = FALSE) {
     bed <- read.table(file_path, header = FALSE, sep = "\t", stringsAsFactors = FALSE)
     

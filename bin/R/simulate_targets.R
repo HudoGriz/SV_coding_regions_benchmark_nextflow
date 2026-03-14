@@ -53,7 +53,6 @@ simulate_targets <- function(repetition_id) {
 
     # Remove exons from high confidence intervals
     gr_filtered <- setdiff(high_confidence_gr, exome_gr, ignore.strand = TRUE)
-    gr_filtered <- high_confidence_gr
     all_chunks <- GRanges()
 
     # Simulate targets

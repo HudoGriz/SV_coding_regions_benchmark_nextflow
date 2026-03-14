@@ -95,12 +95,12 @@ if (!is.null(truvari_stats_sim$data_long) && !is.null(truvari_stats)) {
     # Get unique ranges from real data
     real_ranges <- unique(truvari_stats$data_long$range)
     
-    # Create all combinations of sim tech/caller with real ranges
-    all_combos <- expand.grid(
-        tech = sim_combos$tech,
-        caller = sim_combos$caller,
-        range = real_ranges,
-        stringsAsFactors = FALSE
+    # Create all combinations of existing sim tech/caller pairs with real ranges
+    # (avoid cross-product duplication from independently expanding tech and caller)
+    all_combos <- merge(
+        sim_combos,
+        data.frame(range = real_ranges, stringsAsFactors = FALSE),
+        by = NULL
     )
     
     match_stats <- t(sapply(seq_len(nrow(all_combos)), function(i) {
@@ -140,9 +140,9 @@ if (!is.null(truvari_stats_sim$data_long) && !is.null(truvari_stats)) {
     match_stats <- match_stats[valid_rows, , drop = FALSE]
     
     write.table(
-        format(data.frame(match_stats), scientific = FALSE), 
+        data.frame(match_stats), 
         file.path(tables_dir, "truvari_metrics_simulated_intervals.tsv"), 
-        sep = "\t", row.names = TRUE
+        sep = "\t", row.names = TRUE, quote = FALSE
     )
 } else {
     cat("Skipping simulation vs real comparison (missing data)\n")
@@ -284,12 +284,13 @@ if (!has_real && !has_sim) {
             }
         
         if (nrow(real_data_exutr) > 0 && nrow(sim_data) > 0) {
-            real_data_exutr$tech_caller <- paste(real_data_exutr$tech_clean, real_data_exutr$caller)
+            real_data_exutr$tech_caller <- paste(real_data_exutr$tech_clean, real_data_exutr$caller_display)
             real_data_exutr$ranges_true <- "Simulated EX+UTR-like regions"
+            sim_data$tech_caller_display <- paste(sim_data$tech_clean, sim_data$caller_display)
             
             ggsave(file.path(plots_dir, "facets_plot.png"),
                 ggplot() +
-                    geom_boxplot(data = sim_data, aes(x = factor(0), y = Value, fill = tech_caller),
+                    geom_boxplot(data = sim_data, aes(x = factor(0), y = Value, fill = tech_caller_display),
                         outlier.size = 0.5, position = position_dodge(1), width = 0.7, alpha = 0.6) +
                     geom_point(data = real_data_exutr, 
                         aes(x = factor(0), y = Value, color = tech_caller, shape = ranges),

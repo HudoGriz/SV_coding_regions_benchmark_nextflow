@@ -2,297 +2,294 @@
 
 A Nextflow DSL2 pipeline for calling structural variants across multiple sequencing technologies and benchmarking results with Truvari.
 
-## Overview
+## Features
 
-This pipeline processes BAM files from different sequencing technologies to call structural variants and benchmark the calls against a truth set:
-
-**Supported Technologies & Tools:**
-- **Illumina WES**: Manta
-- **Illumina WGS**: Manta
-- **PacBio**: CuteSV, Pbsv
-- **ONT**: CuteSV, Sniffles
-
-**Benchmarking:**
-- Truvari benchmarking against truth set VCF
-- Three target sets: high confidence, gene panel, WES UTR regions
+- **Multi-technology SV calling**: Supports Illumina (WES/WGS), PacBio, and ONT sequencing
+- **Multiple callers**: Manta, CuteSV, Pbsv, Sniffles
+- **Comprehensive benchmarking**: Truvari comparison against truth sets
+- **Flexible target regions**: High confidence regions, gene panels, or WES with UTR regions
+- **Parallel execution**: All technologies and targets processed simultaneously
+- **Resume capability**: Continue from last successful step with `-resume`
 
 ## Requirements
 
 - Nextflow >= 23.04.0
-- Singularity/Apptainer
-- Local Singularity images in `singularity_images/` directory:
-  - `manta_latest.sif`
-  - `cutesv_latest.sif`
-  - `pbsv_latest.sif`
-  - `sniffles_latest.sif`
-  - `samtools_latest.sif`
-  - `truvari_modded.sif`
+- Container engine: Singularity/Apptainer, Docker, or Conda
+- Input data:
+  - BAM files with indexes (.bai)
+  - Reference genome FASTA with index (.fai)
+  - Truth/baseline VCF with index (.tbi)
+  - Target BED files (optional)
 
 ## Quick Start
 
-### 1. Prepare Input Data
-
-Ensure you have:
-- BAM files (indexed with .bai)
-- Reference genome FASTA (indexed with .fai)
-- Benchmarking VCF (indexed with .tbi)
-- Target BED files
-
-### 2. Configure Parameters
-
-Edit `params.yaml` with your file paths:
-
-```yaml
-fasta: '/path/to/reference.fasta'
-illumina_wes_bam: '/path/to/illumina_wes.bam'
-benchmark_vcf: '/path/to/truth_set.vcf.gz'
-# ... etc
-```
-
-### 3. Run the Pipeline
-
 ```bash
-# Run with all technologies
-nextflow run main.nf -params-file params.yaml -profile singularity
+# 1. Clone the repository
+git clone https://github.com/HudoGriz/SV_coding_regions_benchmark_nextflow.git
+cd SV_coding_regions_benchmark_nextflow
 
-# Run specific technologies only (comment out unwanted BAMs in params.yaml)
-nextflow run main.nf -params-file params.yaml -profile singularity
+# 2. Create a parameters file
+cat > my_params.yaml << EOF
+# Required inputs
+fasta: /path/to/reference.fasta
+vcf_baseline: /path/to/truth_set.vcf.gz
 
-# Resume a previous run
-nextflow run main.nf -params-file params.yaml -profile singularity -resume
+# Optional BAM files (provide only those you want to analyze)
+illumina_wes_bam: /path/to/illumina_wes.bam
+illumina_wgs_bam: /path/to/illumina_wgs.bam
+pacbio_bam: /path/to/pacbio.bam
+ont_bam: /path/to/ont.bam
+
+# Target regions (at least one recommended)
+high_confidence_targets: /path/to/high_conf.bed
+gene_panel_targets: /path/to/gene_panel.bed
+wes_with_utr_targets: /path/to/wes_utr.bed
+
+# Output configuration
+outdir: ./results
+run_name: my_sv_analysis
+EOF
+
+# 3. Run the pipeline
+nextflow run main.nf -params-file my_params.yaml -profile singularity
+
+# 4. Resume if interrupted
+nextflow run main.nf -params-file my_params.yaml -profile singularity -resume
 ```
 
-## Pipeline Structure
+## Pipeline Overview
 
-```
-sv-calling-pipeline/
-├── main.nf                 # Main workflow file
-├── nextflow.config         # Configuration file
-├── params.yaml            # Example parameters
-├── modules/
-│   └── local/
-│       ├── manta.nf       # Illumina SV calling (Manta)
-│       ├── cutesv.nf      # Long-read SV calling (CuteSV)
-│       ├── pbsv.nf        # PacBio SV calling (Pbsv)
-│       ├── sniffles.nf    # ONT SV calling (Sniffles)
-│       └── truvari.nf     # Benchmarking with Truvari
-└── singularity_images/    # Local Singularity containers
-```
+### Supported Technologies and Tools
 
-## Output Structure
+| Technology | SV Callers |
+|-----------|-----------|
+| Illumina WES | Manta |
+| Illumina WGS | Manta |
+| PacBio HiFi | CuteSV, Pbsv |
+| ONT | CuteSV, Sniffles |
 
-```
-results/
-├── calls/
-│   ├── Illumina_WES/
-│   │   └── sv/manta/
-│   ├── Illumina_WGS/
-│   │   └── sv/manta/
-│   ├── PacBio/
-│   │   ├── sv/cutesv/
-│   │   └── sv/pbsv/
-│   └── ONT/
-│       ├── sv/cutesv/
-│       └── sv/sniffles/
-├── real_intervals/
-│   ├── Illumina_WES/
-│   │   └── truvari_benchmark/
-│   ├── Illumina_WGS/
-│   │   └── truvari_benchmark/
-│   ├── PacBio/
-│   │   └── truvari_benchmark/
-│   └── ONT/
-│       └── truvari_benchmark/
-└── pipeline_info/
-    ├── execution_report.html
-    ├── execution_timeline.html
-    ├── execution_trace.txt
-    └── pipeline_dag.svg
-```
+### Workflow
 
-## Parameters
+1. **SV Calling**: Process each BAM file with appropriate caller(s)
+2. **Benchmarking**: Compare called SVs against truth set using Truvari
+3. **Target Analysis**: Evaluate performance across different target regions
 
-### Required Parameters
+## Input Parameters
+
+### Required
 
 | Parameter | Description |
 |-----------|-------------|
 | `fasta` | Reference genome FASTA file |
-| `benchmark_vcf` | Truth set VCF for benchmarking |
-| `*_targets` | BED files defining target regions |
+| `vcf_baseline` | Truth/baseline VCF for benchmarking |
 
-### Input BAM Files (Optional)
+### BAM Files (at least one required)
 
 | Parameter | Description |
 |-----------|-------------|
-| `illumina_wes_bam` | Illumina WES BAM file |
-| `illumina_wgs_bam` | Illumina WGS BAM file |
-| `pacbio_bam` | PacBio BAM file |
-| `ont_bam` | ONT BAM file |
+| `illumina_wes_bam` | Illumina whole-exome sequencing BAM |
+| `illumina_wgs_bam` | Illumina whole-genome sequencing BAM |
+| `pacbio_bam` | PacBio HiFi long-read BAM |
+| `ont_bam` | Oxford Nanopore BAM |
 
-**Note:** Only provide BAM files for technologies you want to analyze. The pipeline will automatically skip technologies without BAM files.
+**Note**: Only provide BAM files for technologies you want to analyze.
 
-### Optional Annotation Files
+### Target Regions (optional but recommended)
+
+| Parameter | Description |
+|-----------|-------------|
+| `high_confidence_targets` | High-confidence genomic regions BED file |
+| `gene_panel_targets` | Gene panel regions BED file |
+| `wes_with_utr_targets` | WES capture regions including UTRs BED file |
+
+### Optional Annotations
 
 | Parameter | Description | Used By |
 |-----------|-------------|---------|
-| `tandem_repeats` | Tandem repeat regions BED file (e.g., from TRF) | Sniffles (ONT) |
-| `wes_sequencing_targets` | WES capture target regions BED file | Manta (WES) |
-
-**Tandem Repeats:** Improves Sniffles SV calling accuracy in repetitive regions. Can be generated using [Tandem Repeats Finder (TRF)](https://tandem.bu.edu/trf/trf.html) or downloaded from genome annotation databases.
+| `tandem_repeats` | Tandem repeat regions BED | Sniffles (ONT) |
+| `wes_sequencing_targets` | WES capture targets BED.gz + .tbi | Manta (WES) |
 
 ### Truvari Parameters
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `truvari_refdist` | 500 | Reference distance for matching |
-| `truvari_pctsize` | 0.7 | Percent size similarity |
-| `truvari_pctovl` | 0 | Percent overlap |
-| `truvari_pctseq` | 0 | Percent sequence similarity |
+| `truvari_refdist` | 500 | Maximum reference distance (bp) |
+| `truvari_pctsize` | 0.7 | Minimum size similarity (0-1) |
+| `truvari_pctseq` | 0.0 | Minimum sequence similarity (0-1) |
+| `truvari_pctovl` | 0.0 | Minimum reciprocal overlap (0-1) |
 
 WES-specific parameters can be set with `truvari_wes_*` prefix.
 
-### Resource Parameters
+### Resource Limits
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `max_cpus` | 24 | Maximum CPUs per process |
+| `max_cpus` | 16 | Maximum CPUs per process |
 | `max_memory` | 128.GB | Maximum memory per process |
-| `max_time` | 48.h | Maximum time per process |
+| `max_time` | 240.h | Maximum time per process |
+
+## Output Structure
+
+```
+results/
+├── {run_name}/
+│   ├── calls/                    # SV calls for each technology
+│   │   ├── Illumina_WES/
+│   │   │   └── sv/manta/
+│   │   ├── Illumina_WGS/
+│   │   │   └── sv/manta/
+│   │   ├── PacBio/
+│   │   │   ├── sv/cutesv/
+│   │   │   └── sv/pbsv/
+│   │   └── ONT/
+│   │       ├── sv/cutesv/
+│   │       └── sv/sniffles/
+│   ├── benchmarking/             # Truvari results per target
+│   │   ├── high_confidence/
+│   │   ├── gene_panel/
+│   │   └── wes_with_utr/
+│   └── pipeline_info/           # Execution reports
+│       ├── execution_report.html
+│       ├── execution_timeline.html
+│       └── execution_trace.txt
+```
 
 ## Profiles
 
-- `singularity`: Use Singularity containers (recommended)
-- `local`: Run on local machine
-- `slurm`: Submit jobs to SLURM cluster
-- `standard`: Default profile (Singularity + local executor)
+Available execution profiles:
+
+| Profile | Description |
+|---------|-------------|
+| `singularity` | Use Singularity/Apptainer containers (recommended) |
+| `docker` | Use Docker containers |
+| `conda` | Use Conda environments |
+| `test` | Run minimal test with small dataset |
+
+Combine profiles with comma: `-profile test,docker`
 
 ## Advanced Usage
 
-### Running Only Specific Technologies
-
-Comment out unwanted BAM files in `params.yaml`:
-
-```yaml
-# illumina_wes_bam: '/path/to/wes.bam'  # Commented out - will skip
-illumina_wgs_bam: '/path/to/wgs.bam'    # Will run
-```
-
-### Overriding Parameters on Command Line
+### Command-Line Parameter Override
 
 ```bash
 nextflow run main.nf \
   -params-file params.yaml \
   --max_cpus 48 \
+  --truvari_refdist 1000 \
   --outdir custom_output
 ```
 
-### Using Custom Container Paths
+### Running Specific Technologies
 
-Edit `nextflow.config`:
+Omit unwanted BAM files from params file or set to empty string:
 
-```groovy
-params {
-    container_manta = "file:///custom/path/manta.sif"
-    // ... etc
-}
+```yaml
+illumina_wes_bam: /path/to/wes.bam    # Will run
+illumina_wgs_bam: ''                   # Will skip
 ```
 
-## Key Differences from Bash Pipeline
+### Skip Specific Tools
 
-1. **Parallel Execution**: All technologies run in parallel automatically
-2. **Resume Capability**: Use `-resume` to continue from last completed step
-3. **Resource Management**: Automatic CPU/memory allocation per process
-4. **Scalability**: Easy to run on HPC clusters with profile changes
-5. **Reproducibility**: Explicit container and parameter versioning
-6. **No Manual Checkpointing**: Nextflow handles execution tracking
+```bash
+nextflow run main.nf \
+  -params-file params.yaml \
+  --skip_pbsv true \              # Skip PBSV calling
+  --skip_benchmarking true        # Skip Truvari benchmarking
+```
+
+### Target Region Simulation
+
+For testing or exploring coverage, enable random target simulation:
+
+```yaml
+simulate_targets: true
+num_simulated_targets: 10
+simulated_target_size: 5000000
+```
 
 ## Testing
 
-The pipeline includes comprehensive test profiles to validate functionality.
-
-### Quick Test
-
-Test the simulation features with minimal data:
+Run the test profile to verify installation:
 
 ```bash
-nextflow run main.nf -profile test_simulation,docker
+# Test with Docker
+nextflow run main.nf -profile test,docker
+
+# Test with Singularity
+nextflow run main.nf -profile test,singularity
 ```
 
-**Expected runtime**: ~5-10 minutes
-
-This test will:
-- Run SV calling with Illumina WES test data
-- Generate 5 simulated target regions
-- Benchmark all target sets
-- Generate statistics and plots
-
-### Test Profiles Available
-
-| Profile | Description | Runtime |
-|---------|-------------|---------|
-| `test` | Minimal functionality test | ~5 min |
-| `test_nfcore` | Standard nf-core test | ~10 min |
-| `test_simulation` | Simulation & statistics test | ~5-10 min |
-
-### Validation
-
-Check test outputs:
-
-```bash
-# Verify simulated BED files
-ls test_results_simulation/simulated_targets/*.bed | wc -l  # Should be 5
-
-# Check statistics generated
-ls test_results_simulation/statistics/plots/
-
-# View summary
-cat test_results_simulation/statistics/summary_statistics.txt
-```
-
-### Comprehensive Testing Guide
-
-For detailed testing instructions, see:
-- **Quick Reference**: [docs/QUICK_TEST.md](docs/QUICK_TEST.md)
-- **Full Testing Guide**: [docs/TESTING_SIMULATION.md](docs/TESTING_SIMULATION.md)
-- **Test Data Info**: [test_data/README.md](test_data/README.md)
-
-### CI/CD
-
-The pipeline uses GitHub Actions for continuous testing:
-- `.github/workflows/test_simulation.yml` - Simulation feature testing
-- Automatically runs on pull requests and pushes
+Expected runtime: ~5-10 minutes
 
 ## Troubleshooting
 
-### Singularity Mount Issues
-
-If containers can't access files, ensure paths are accessible:
-- Nextflow automatically mounts paths (v23.09+)
-- Use absolute paths in parameters
-- Check Singularity configuration: `singularity.autoMounts = true`
-
 ### BAM Index Not Found
 
-Ensure `.bai` files exist alongside BAM files:
+Ensure `.bai` index files exist:
 ```bash
 samtools index your_file.bam
 ```
 
-### Out of Memory Errors
+### VCF Index Missing
 
-Increase memory in `nextflow.config`:
+Ensure VCF is bgzipped and indexed:
+```bash
+bgzip truth_set.vcf
+tabix -p vcf truth_set.vcf.gz
+```
+
+### Container Mount Issues
+
+For Singularity, use absolute paths and ensure auto-mounting is enabled in `nextflow.config`:
 ```groovy
-withName: 'PROCESS_NAME' {
-    memory = { check_max(64.GB * task.attempt, 'memory') }
+singularity.autoMounts = true
+```
+
+### Memory Errors
+
+Increase memory limits in command line or config:
+```bash
+nextflow run main.nf --max_memory 256.GB
+```
+
+## Container Images
+
+The pipeline uses pre-built containers from:
+- Docker Hub (for Docker profile)
+- Locally cached images (for Singularity profile)
+
+Container paths can be customized in `nextflow.config`:
+```groovy
+params {
+    container_manta = "docker://biocontainers/manta:latest"
+    container_cutesv = "docker://biocontainers/cutesv:latest"
+    // ... etc
 }
 ```
 
 ## Citation
 
 If you use this pipeline, please cite:
-- Nextflow: https://doi.org/10.1038/nbt.3820
-- Individual tools (Manta, CuteSV, Pbsv, Sniffles, Truvari)
+
+- **Nextflow**: Di Tommaso, P., et al. (2017). Nextflow enables reproducible computational workflows. Nature Biotechnology. https://doi.org/10.1038/nbt.3820
+- **Manta**: Chen, X., et al. (2016). Manta: rapid detection of structural variants and indels for germline and cancer sequencing applications. Bioinformatics.
+- **CuteSV**: Jiang, T., et al. (2020). Long-read-based human genomic structural variation detection with cuteSV. Genome Biology.
+- **Pbsv**: Pacific Biosciences. https://github.com/PacificBiosciences/pbsv
+- **Sniffles**: Sedlazeck, F.J., et al. (2018). Accurate detection of complex structural variations using single-molecule sequencing. Nature Methods.
+- **Truvari**: English, A.C., et al. (2022). Truvari: refined structural variant comparison preserves allelic diversity. Genome Biology.
 
 ## License
 
 This pipeline is provided as-is for research purposes.
+
+## Contributing
+
+Contributions are welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request
+
+## Support
+
+For issues and questions:
+- GitHub Issues: https://github.com/HudoGriz/SV_coding_regions_benchmark_nextflow/issues

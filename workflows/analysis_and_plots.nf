@@ -17,7 +17,13 @@ workflow ANALYSIS_AND_PLOTS {
     // Organize Truvari results for staging
     // We need to stage the actual result directories from work directories, not rely on publishing
     //
+    // Only the primary breakend mode feeds the headline tables and plots. The
+    // sensitivity mode is published under bnd_sensitivity/ and summarised
+    // separately, so mixing it in here would double-count every pipeline.
     ch_organized_results = ch_truvari_results
+        .filter { meta, summary ->
+            (meta.bnd_mode ?: params.primary_bnd_mode) == params.primary_bnd_mode
+        }
         .map { meta, summary ->
             // Get the parent directory containing all Truvari outputs
             def result_dir = summary.parent

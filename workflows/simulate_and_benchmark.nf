@@ -55,15 +55,26 @@ workflow SIMULATE_AND_BENCHMARK {
         }
 
     //
+    // Breakend modes applied to the empirical null. This is the expensive part
+    // of the pipeline (num_simulations x pipelines), so it defaults to the
+    // primary mode only; params.bnd_modes_simulated widens it if needed.
+    //
+    ch_bnd_modes = Channel.fromList(
+        params.bnd_modes_simulated.toString().split(',').collect { it.trim() }.findAll { it }
+    )
+
+    //
     // Combine VCFs with simulated target BEDs for benchmarking
     //
     ch_bench_input = ch_vcfs_for_simulation
         .combine(ch_simulated_beds)
-        .map { vcf_meta, vcf, tbi, bed_meta, bed ->
+        .combine(ch_bnd_modes)
+        .map { vcf_meta, vcf, tbi, bed_meta, bed, bnd_mode ->
             def combined_meta = vcf_meta + bed_meta
-            combined_meta.id = "${vcf_meta.id}_${bed_meta.id}"
+            combined_meta.id = "${vcf_meta.id}_${bed_meta.id}_${bnd_mode}"
             // Set target to the simulation ID for proper file naming
             combined_meta.target = bed_meta.id
+            combined_meta.bnd_mode = bnd_mode
             [combined_meta, vcf, tbi, bed]
         }
 

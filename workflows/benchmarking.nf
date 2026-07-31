@@ -19,25 +19,36 @@ workflow BENCHMARKING {
     
     main:
     
-    // Create combinations of VCFs and target sets for benchmarking
+    // Breakend handling is a scored variable, not a fixed setting: the GIAB
+    // truth sets contain no BND records, so retaining them charges every
+    // breakend a caller emits as a false positive. Each target is therefore
+    // benchmarked once per mode in params.bnd_modes.
+    ch_bnd_modes = Channel.fromList(
+        params.bnd_modes.toString().split(',').collect { it.trim() }.findAll { it }
+    )
+
+    // Create combinations of VCFs, target sets and breakend modes
     ch_benchmark_input = ch_vcfs
         .combine(ch_targets)
+        .combine(ch_bnd_modes)
         .combine(ch_benchmark_vcf)
         .combine(ch_benchmark_vcf_tbi)
-        .map { meta, vcf, vcf_tbi, target_name, target_bed, truth_vcf, truth_tbi ->
+        .map { meta, vcf, vcf_tbi, target_name, target_bed, bnd_mode, truth_vcf, truth_tbi ->
             // Determine if WES-specific parameters should be used
             def is_wes = meta.technology == 'Illumina_WES'
             def refdist = is_wes ? params.truvari_wes_refdist : params.truvari_refdist
             def pctsize = is_wes ? params.truvari_wes_pctsize : params.truvari_pctsize
             def pctovl = is_wes ? params.truvari_wes_pctovl : params.truvari_pctovl
             def pctseq = is_wes ? params.truvari_wes_pctseq : params.truvari_pctseq
-            
-            // Add target and truvari parameters to metadata
+
+            // Add target, breakend mode and truvari parameters to metadata
             def meta_with_args = meta + [
                 target: target_name,
+                bnd_mode: bnd_mode,
                 truvari_args: "--refdist ${refdist} --pctsize ${pctsize} --pctovl ${pctovl} --pctseq ${pctseq}"
             ]
-            
+            meta_with_args.id = "${meta.id}_${target_name}_${bnd_mode}"
+
             [meta_with_args, vcf, vcf_tbi, truth_vcf, truth_tbi, target_bed]
         }
     

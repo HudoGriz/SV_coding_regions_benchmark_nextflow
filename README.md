@@ -4,6 +4,8 @@ A Nextflow DSL2 pipeline for systematic benchmarking of structural variant (SV) 
 
 This pipeline accompanies the manuscript:
 > **Current Structural Variant Calling Biases Compromise Clinical Genome Diagnostics**
+>
+> Preprint: [10.21203/rs.3.rs-9179453/v1](https://doi.org/10.21203/rs.3.rs-9179453/v1)
 
 ## Overview
 

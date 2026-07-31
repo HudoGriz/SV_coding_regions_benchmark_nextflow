@@ -43,30 +43,43 @@ process TRUVARI_REFINE {
     # refine's default --regions is <benchdir>/candidate.refine.bed
     ln -s ../${candidates}  bench/candidate.refine.bed
 
-    if [ -s bench/candidate.refine.bed ]; then
-        # --reference is passed explicitly rather than relying on the path in
-        # params.json, which points at the original run's staging directory.
-        truvari refine \\
-            --reference ${fasta} \\
-            --threads ${task.cpus} \\
-            ${args} \\
-            bench
+    # --reference is passed explicitly rather than relying on the path in
+    # params.json, which points at the original run's staging directory.
+    #
+    # When no region holds both an unmatched call and something to harmonize it
+    # against, refine logs "No regions to be refined", writes no summary, and
+    # still exits 0. Illumina WES on the gene panel does exactly that: 4 TP,
+    # 0 FP, 1,278 FN, so nothing can be rescued. Branch on whether the output
+    # actually exists rather than on the exit code, which does not distinguish
+    # the two cases.
+    set +e
+    truvari refine \\
+        --reference ${fasta} \\
+        --threads ${task.cpus} \\
+        ${args} \\
+        bench > refine.console.txt 2>&1
+    rc=\$?
+    set -e
+    cat refine.console.txt
 
+    if [ -f bench/refine.variant_summary.json ]; then
         mv bench/refine.variant_summary.json ./${prefix}.refine.variant_summary.json
         mv bench/refine.region_summary.json  ./${prefix}.refine.region_summary.json
         mv bench/refine.regions.txt          ./${prefix}.refine.regions.txt
         mv bench/refine.log.txt              ./${prefix}.refine.log.txt
-    else
-        # bench found nothing worth harmonizing. That is a legitimate outcome
-        # for a target where a caller has almost no matched calls (Illumina WES
-        # in particular), so emit the unrefined summary rather than failing and
-        # taking the run down with it.
-        echo "no refine candidates for ${prefix}; emitting the unrefined result" \\
-            | tee ./${prefix}.refine.log.txt
+    elif grep -q "No regions to be refined" refine.console.txt; then
+        echo "${prefix}: nothing to harmonize; carrying the unrefined result forward"
         cp ${summary} ./${prefix}.refine.variant_summary.json
-        echo '{"note": "no refine candidates", "refined_regions": 0}' \\
+        echo '{"note": "no regions to be refined", "refined_regions": 0}' \\
             > ./${prefix}.refine.region_summary.json
         printf 'chrom\\tstart\\tend\\trefined\\n' > ./${prefix}.refine.regions.txt
+        cp refine.console.txt ./${prefix}.refine.log.txt
+    else
+        echo "${prefix}: truvari refine produced no summary (exit \$rc)" >&2
+        # never exit 0 here: reaching this branch means refine neither wrote a
+        # result nor reported that there was nothing to do
+        [ \$rc -ne 0 ] && exit \$rc
+        exit 1
     fi
 
     cat <<-END_VERSIONS > versions.yml

@@ -91,6 +91,7 @@ workflow BENCHMARKING {
         .join(TRUVARI_BENCH.out.fp_tbi)
         .join(TRUVARI_BENCH.out.summary)
         .join(TRUVARI_BENCH.out.params)
+        .join(TRUVARI_BENCH.out.refine_candidates)
         .filter { it[0].bnd_mode == null || it[0].bnd_mode == params.primary_bnd_mode }
 
     if (params.truvari_refine) {

@@ -29,6 +29,9 @@ process TRUVARI_BENCH {
     // Declaring it as an output does not alter the task script, so previously
     // cached bench tasks stay valid.
     tuple val(meta), path("*/params.json")       , emit: params
+    // candidate.refine.bed is what `truvari refine` uses as its default
+    // --regions; it also stays inside the bench output directory.
+    tuple val(meta), path("*/candidate.refine.bed"), emit: refine_candidates
     path "versions.yml"                          , emit: versions
 
     when:

@@ -6,7 +6,8 @@ process TRUVARI_REFINE {
 
     input:
     tuple val(meta), path(tp_base), path(tp_base_tbi), path(tp_comp), path(tp_comp_tbi),
-          path(fn), path(fn_tbi), path(fp), path(fp_tbi), path(summary), path(params_json)
+          path(fn), path(fn_tbi), path(fp), path(fp_tbi), path(summary), path(params_json),
+          path(candidates)
     tuple val(meta2), path(fasta)
     tuple val(meta3), path(fai)
 
@@ -39,19 +40,34 @@ process TRUVARI_REFINE {
     ln -s ../${fp_tbi}      bench/fp.vcf.gz.tbi
     ln -s ../${summary}     bench/summary.json
     ln -s ../${params_json} bench/params.json
+    # refine's default --regions is <benchdir>/candidate.refine.bed
+    ln -s ../${candidates}  bench/candidate.refine.bed
 
-    # --reference is passed explicitly rather than relying on the path recorded
-    # in params.json, which points at the original run's staging directory.
-    truvari refine \\
-        --reference ${fasta} \\
-        --threads ${task.cpus} \\
-        ${args} \\
-        bench
+    if [ -s bench/candidate.refine.bed ]; then
+        # --reference is passed explicitly rather than relying on the path in
+        # params.json, which points at the original run's staging directory.
+        truvari refine \\
+            --reference ${fasta} \\
+            --threads ${task.cpus} \\
+            ${args} \\
+            bench
 
-    mv bench/refine.variant_summary.json ./${prefix}.refine.variant_summary.json
-    mv bench/refine.region_summary.json  ./${prefix}.refine.region_summary.json
-    mv bench/refine.regions.txt          ./${prefix}.refine.regions.txt
-    mv bench/refine.log.txt              ./${prefix}.refine.log.txt
+        mv bench/refine.variant_summary.json ./${prefix}.refine.variant_summary.json
+        mv bench/refine.region_summary.json  ./${prefix}.refine.region_summary.json
+        mv bench/refine.regions.txt          ./${prefix}.refine.regions.txt
+        mv bench/refine.log.txt              ./${prefix}.refine.log.txt
+    else
+        # bench found nothing worth harmonizing. That is a legitimate outcome
+        # for a target where a caller has almost no matched calls (Illumina WES
+        # in particular), so emit the unrefined summary rather than failing and
+        # taking the run down with it.
+        echo "no refine candidates for ${prefix}; emitting the unrefined result" \\
+            | tee ./${prefix}.refine.log.txt
+        cp ${summary} ./${prefix}.refine.variant_summary.json
+        echo '{"note": "no refine candidates", "refined_regions": 0}' \\
+            > ./${prefix}.refine.region_summary.json
+        printf 'chrom\\tstart\\tend\\trefined\\n' > ./${prefix}.refine.regions.txt
+    fi
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

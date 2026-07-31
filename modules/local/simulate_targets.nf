@@ -32,4 +32,15 @@ process SIMULATE_TARGETS {
 
     echo "Simulated interval sets written: \$(ls -1 simulated_targets/*.bed | wc -l)"
     """
+
+    stub:
+    // Without this, -stub-run falls through to the real script and spends
+    // roughly an hour simulating, which defeats the point of a stub.
+    """
+    mkdir -p simulated_targets
+    for i in \$(seq 1 ${num_simulations}); do
+        printf '1\\t1000\\t1200\\n' > simulated_targets/simulation\$i.bed
+    done
+    echo "Stub wrote \$(ls -1 simulated_targets/*.bed | wc -l) interval sets"
+    """
 }

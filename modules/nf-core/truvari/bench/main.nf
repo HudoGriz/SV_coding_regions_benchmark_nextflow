@@ -23,6 +23,12 @@ process TRUVARI_BENCH {
     tuple val(meta), path("*.tp-comp.vcf.gz.tbi"), emit: tp_comp_tbi
     tuple val(meta), path("*.summary.json")      , emit: summary
     tuple val(meta), path("*.log.txt")           , emit: log
+    // params.json stays inside the bench output directory: the mv commands
+    // below only lift out the files that get published. TRUVARI_REFINE needs
+    // it, because `truvari refine` reads its settings from the bench result.
+    // Declaring it as an output does not alter the task script, so previously
+    // cached bench tasks stay valid.
+    tuple val(meta), path("*/params.json")       , emit: params
     path "versions.yml"                          , emit: versions
 
     when:
@@ -72,6 +78,12 @@ process TRUVARI_BENCH {
     touch ${prefix}.tp-comp.vcf.gz.tbi
     touch ${prefix}.summary.json
     touch ${prefix}.log.txt
+
+    # The real run leaves params.json inside the bench output directory; the
+    # stub has to reproduce that layout or the params output cannot be resolved.
+    mkdir -p ${prefix}
+    echo '{}' > ${prefix}/params.json
+    touch ${prefix}/candidate.refine.bed
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

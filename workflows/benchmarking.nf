@@ -7,6 +7,7 @@
 */
 
 include { TRUVARI_BENCH } from '../modules/nf-core/truvari/bench/main'
+include { TRUVARI_REFINE } from '../modules/local/truvari_refine'
 
 workflow BENCHMARKING {
     take:
@@ -62,7 +63,44 @@ workflow BENCHMARKING {
         ch_fasta_with_meta,
         ch_fasta_fai_with_meta
     )
-    
+
+    //
+    // Harmonize variant representation and re-score.
+    //
+    // `truvari refine` runs phab over the regions holding FN/FP calls and
+    // re-benchmarks the harmonized variants, so calls that were only written
+    // differently by the two callers stop counting as errors. On GRCh37 HCI
+    // this reclassifies roughly 90 calls per pipeline.
+    //
+    // Only the primary breakend mode is refined. The sensitivity comparison is
+    // about whether breakends are scored at all, and is made between the two
+    // unrefined results, so refining one arm of it would not be like-for-like.
+    //
+    // Note that refine's own region stratification uses containment, so
+    // variants spanning a target boundary - the ones --bench-overlaps exists to
+    // score - are not candidates for harmonization. They keep their original
+    // state, which is the conservative outcome.
+    //
+    ch_refine_input = TRUVARI_BENCH.out.tp_base_vcf
+        .join(TRUVARI_BENCH.out.tp_base_tbi)
+        .join(TRUVARI_BENCH.out.tp_comp_vcf)
+        .join(TRUVARI_BENCH.out.tp_comp_tbi)
+        .join(TRUVARI_BENCH.out.fn_vcf)
+        .join(TRUVARI_BENCH.out.fn_tbi)
+        .join(TRUVARI_BENCH.out.fp_vcf)
+        .join(TRUVARI_BENCH.out.fp_tbi)
+        .join(TRUVARI_BENCH.out.summary)
+        .join(TRUVARI_BENCH.out.params)
+        .filter { it[0].bnd_mode == null || it[0].bnd_mode == params.primary_bnd_mode }
+
+    if (params.truvari_refine) {
+        TRUVARI_REFINE(
+            ch_refine_input,
+            ch_fasta_with_meta,
+            ch_fasta_fai_with_meta
+        )
+    }
+
     emit:
     summary = TRUVARI_BENCH.out.summary  // channel: [meta, summary.json]
 }

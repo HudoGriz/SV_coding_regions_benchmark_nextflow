@@ -149,6 +149,40 @@
                     "default": false,
                     "description": "Generate aggregate statistics and plots",
                     "help_text": "Run analysis workflow to aggregate results and create visualizations."
+                },
+                "generate_transition_evidence": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Generate record-level target-transition evidence and figures"
+                },
+                "transition_hci_target": {
+                    "type": "string",
+                    "default": "high_confidence",
+                    "description": "Broad target name used as the transition-audit baseline"
+                },
+                "transition_target": {
+                    "type": "string",
+                    "default": "wes_utr",
+                    "description": "Restricted target name audited against the broad baseline"
+                },
+                "transition_target_label": {
+                    "type": "string",
+                    "default": "EX+UTR",
+                    "description": "Publication label written for the restricted target"
+                },
+                "transition_include_wes": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include capture-restricted Illumina WES in the transition audit"
+                },
+                "reference_assembly": {
+                    "type": "string",
+                    "description": "Reference assembly label written to evidence tables"
+                },
+                "analysis_container": {
+                    "type": "string",
+                    "default": "containers/python-r-analysis.sif",
+                    "description": "Singularity/Apptainer image containing Python and R analysis dependencies"
                 }
             }
         },

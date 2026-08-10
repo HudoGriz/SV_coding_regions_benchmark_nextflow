@@ -23,6 +23,7 @@ include { SV_CALLING } from './workflows/sv_calling'
 include { BENCHMARKING } from './workflows/benchmarking'
 include { SIMULATE_AND_BENCHMARK } from './workflows/simulate_and_benchmark'
 include { ANALYSIS_AND_PLOTS } from './workflows/analysis_and_plots'
+include { TARGET_TRANSITION_EVIDENCE } from './workflows/target_transition_evidence'
 
 /*
 ========================================================================================
@@ -69,6 +70,7 @@ workflow {
           
         Analysis Options:
           --gather_statistics    Generate statistics and plots (default: false)
+          --generate_transition_evidence  Audit target-boundary transitions and create figures
         
         Profiles:
           test_nfcore            Run with nf-core test data
@@ -171,6 +173,8 @@ workflow {
     //
     // SUBWORKFLOW: Simulation and benchmarking (optional)
     //
+    ch_simulation_transition_evidence = Channel.empty()
+    ch_simulated_evidence_beds = Channel.empty()
     if (params.simulate_targets && params.benchmark_vcf) {
         // Validate required parameters - check all at once
         def missing_params = []
@@ -205,6 +209,8 @@ workflow {
             ch_high_confidence
         )
         ch_truvari_results = ch_truvari_results.mix(SIMULATE_AND_BENCHMARK.out.truvari_results)
+        ch_simulation_transition_evidence = SIMULATE_AND_BENCHMARK.out.transition_evidence_input
+        ch_simulated_evidence_beds = SIMULATE_AND_BENCHMARK.out.simulated_beds
         
         log.info """
         =====================================================
@@ -226,6 +232,17 @@ workflow {
         Statistics and plots generated
         =====================================================
         """.stripIndent()
+    }
+
+    if (params.generate_transition_evidence && (params.benchmark_vcf && !params.skip_benchmarking)) {
+        TARGET_TRANSITION_EVIDENCE(
+            BENCHMARKING.out.transition_evidence_input,
+            ch_targets,
+            ch_simulation_transition_evidence,
+            ch_simulated_evidence_beds
+        )
+
+        log.info "Target-transition evidence tables and figures generated"
     }
     
     /*

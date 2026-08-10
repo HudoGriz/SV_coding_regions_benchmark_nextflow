@@ -110,7 +110,19 @@ workflow SIMULATE_AND_BENCHMARK {
         ch_fai_input
     )
 
+    ch_transition_evidence_input = TRUVARI_BENCH.out.tp_base_vcf
+        .join(TRUVARI_BENCH.out.tp_comp_vcf)
+        .join(TRUVARI_BENCH.out.fn_vcf)
+        .join(TRUVARI_BENCH.out.fp_vcf)
+        .filter { meta, tp_base, tp_comp, fn, fp ->
+            meta.bnd_mode == null || meta.bnd_mode == params.primary_bnd_mode
+        }
+        .map { meta, tp_base, tp_comp, fn, fp ->
+            [meta, tp_base, tp_comp, fn, fp]
+        }
+
     emit:
     simulated_beds = SIMULATE_TARGETS.out.simulated_beds
     truvari_results = TRUVARI_BENCH.out.summary
+    transition_evidence_input = ch_transition_evidence_input
 }

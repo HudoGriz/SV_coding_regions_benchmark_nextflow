@@ -94,6 +94,12 @@ workflow BENCHMARKING {
         .join(TRUVARI_BENCH.out.refine_candidates)
         .filter { it[0].bnd_mode == null || it[0].bnd_mode == params.primary_bnd_mode }
 
+    ch_transition_evidence_input = ch_refine_input.map {
+        meta, tp_base, tp_base_tbi, tp_comp, tp_comp_tbi, fn, fn_tbi, fp, fp_tbi,
+        summary, bench_params, refine_candidates ->
+        [meta, tp_base, tp_comp, fn, fp]
+    }
+
     if (params.truvari_refine) {
         TRUVARI_REFINE(
             ch_refine_input,
@@ -104,4 +110,5 @@ workflow BENCHMARKING {
 
     emit:
     summary = TRUVARI_BENCH.out.summary  // channel: [meta, summary.json]
+    transition_evidence_input = ch_transition_evidence_input // channel: [meta, tp-base, tp-comp, fn, fp]
 }

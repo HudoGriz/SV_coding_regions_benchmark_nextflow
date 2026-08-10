@@ -1,0 +1,69 @@
+Bootstrap: library
+From: blazv/benchmark-sv/r-env:4-4-1
+
+%labels
+    Author CISLD
+    Description Unified Python and R analysis environment for SV evidence, simulation, statistics, and plots
+    R 4.4.1
+    Python 3
+
+%files
+    bin/python/target_transition_audit.py /opt/sv-analysis/bin/target_transition_audit.py
+    bin/python/merge_transition_audits.py /opt/sv-analysis/bin/merge_transition_audits.py
+    bin/python/plot_target_boundary_mechanisms.py /opt/sv-analysis/bin/plot_target_boundary_mechanisms.py
+    bin/python/exutr_factor_attribution.py /opt/sv-analysis/bin/exutr_factor_attribution.py
+    bin/python/sv_occurrence_map.py /opt/sv-analysis/bin/sv_occurrence_map.py
+    bin/python/pad_target_bed.py /opt/sv-analysis/bin/pad_target_bed.py
+    bin/python/padding_transition_recovery.py /opt/sv-analysis/bin/padding_transition_recovery.py
+    bin/python/summarize_padding_sensitivity.py /opt/sv-analysis/bin/summarize_padding_sensitivity.py
+    bin/python/compare_metric_tables.py /opt/sv-analysis/bin/compare_metric_tables.py
+
+%post
+    wget -q https://github.com/conda-forge/miniforge/releases/download/25.3.1-0/Miniforge3-25.3.1-0-Linux-x86_64.sh \
+        -O /tmp/miniforge.sh
+    bash /tmp/miniforge.sh -b -p /opt/sv-analysis/conda
+    rm /tmp/miniforge.sh
+    /opt/sv-analysis/conda/bin/conda create -y -p /opt/sv-analysis/python python=3.11 pip
+    /opt/sv-analysis/conda/bin/conda clean -afy
+
+    /opt/sv-analysis/python/bin/pip install --no-cache-dir \
+        intervaltree==3.1.0 \
+        matplotlib==3.10.5 \
+        numpy==2.3.2 \
+        pandas==2.3.1 \
+        pillow==11.3.0 \
+        pysam==0.23.3
+
+    chmod 0755 /opt/sv-analysis/bin/*.py
+    ln -s /opt/sv-analysis/bin/target_transition_audit.py /usr/local/bin/target-transition-audit
+    ln -s /opt/sv-analysis/bin/merge_transition_audits.py /usr/local/bin/merge-transition-audits
+    ln -s /opt/sv-analysis/bin/plot_target_boundary_mechanisms.py /usr/local/bin/plot-target-boundary-mechanisms
+    ln -s /opt/sv-analysis/bin/exutr_factor_attribution.py /usr/local/bin/exutr-factor-attribution
+    ln -s /opt/sv-analysis/bin/sv_occurrence_map.py /usr/local/bin/sv-occurrence-map
+    ln -s /opt/sv-analysis/bin/pad_target_bed.py /usr/local/bin/pad-target-bed
+    ln -s /opt/sv-analysis/bin/padding_transition_recovery.py /usr/local/bin/padding-transition-recovery
+    ln -s /opt/sv-analysis/bin/summarize_padding_sensitivity.py /usr/local/bin/summarize-padding-sensitivity
+    ln -s /opt/sv-analysis/bin/compare_metric_tables.py /usr/local/bin/compare-metric-tables
+
+%environment
+    export PATH=/opt/sv-analysis/python/bin:$PATH
+    export MPLBACKEND=Agg
+    export MPLCONFIGDIR=/tmp/matplotlib
+    export LC_ALL=C.UTF-8
+    export LANG=C.UTF-8
+
+%runscript
+    echo "SV Python/R analysis container"
+    echo "R: simulation and aggregate statistics"
+    echo "Python: transition audits, evidence tables, factor attribution, and figures"
+
+%test
+    Rscript -e "library(GenomicRanges); library(rtracklayer); library(ggplot2); library(jsonlite)"
+    python -c "import intervaltree, matplotlib, numpy, pandas, PIL, pysam"
+    target-transition-audit --help >/dev/null
+    merge-transition-audits --help >/dev/null
+    plot-target-boundary-mechanisms --help >/dev/null
+    pad-target-bed --help >/dev/null
+    padding-transition-recovery --help >/dev/null
+    summarize-padding-sensitivity --help >/dev/null
+    compare-metric-tables --help >/dev/null

@@ -3,13 +3,13 @@
 A Nextflow DSL2 pipeline for systematic benchmarking of structural variant (SV) detection across multiple sequencing technologies and genomic interval categories using the Genome in a Bottle (GIAB) HG002 truth set.
 
 This pipeline accompanies the manuscript:
-> **Current Structural Variant Calling Biases Compromise Clinical Genome Diagnostics**
+> **How Diagnostic Target Selection Alters Structural Variant Benchmarking**
 >
 > Preprint: [10.21203/rs.3.rs-9179453/v1](https://doi.org/10.21203/rs.3.rs-9179453/v1)
 
 ## Overview
 
-The pipeline evaluates SV detection performance across four sequencing platforms (Illumina WES, Illumina WGS, PacBio HiFi, ONT) within three nested genomic interval sets (high-confidence intervals, gene panel, exons+UTRs). It includes a novel simulation framework that generates exon-like target regions in noncoding space to isolate genomic context effects from interval size confounding.
+The pipeline evaluates SV detection performance across four sequencing platforms (Illumina WES, Illumina WGS, PacBio HiFi, ONT) within three genomic interval sets (high-confidence intervals, gene panel, exons+UTRs). Its simulation framework generates length- and chromosome-frequency-matched noncoding targets to measure the operational behavior of fragmented intervals. Because those targets do not match truth-SV composition or sequence context, they are an empirical interval null rather than a causal isolation of coding context.
 
 ### Pipeline Workflow
 
@@ -22,7 +22,7 @@ PREPARE_REFERENCES ─> SV_CALLING ─> BENCHMARKING ─┬─> SIMULATE_AND_BEN
 2. **SV Calling** -- Call structural variants with technology-appropriate callers
 3. **Benchmarking** -- Compare calls against truth set using Truvari across all target intervals
 4. **Simulation** -- Generate 500 random exon-like interval sets and benchmark against them
-5. **Analysis** -- Compute statistics, percentile rankings, KDE outlier analysis, and generate publication plots
+5. **Analysis** -- Compute statistics, percentile rankings, KDE outlier analysis, record-level target-transition evidence, and publication plots
 
 ### Supported Technologies and Callers
 
@@ -134,6 +134,7 @@ At least one BAM file must be provided.
 | `simulate_targets` | `false` | Enable simulated interval analysis |
 | `num_simulations` | `100` | Number of simulated interval sets to generate |
 | `gather_statistics` | `false` | Generate publication plots and statistics tables |
+| `generate_transition_evidence` | `false` | Trace HCI-to-target outcome changes through exact Truvari MatchIds |
 
 ### Truvari Parameters
 
@@ -200,6 +201,36 @@ All Truvari runs include `--bench-overlaps --passonly --dup-to-ins` flags. The p
 
 Combine profiles: `-profile singularity` or `-profile test_nfcore,docker`
 
+### Target-transition evidence and publication figures
+
+Build the versioned analysis image once from the repository root:
+
+```bash
+bin/build_python_r_analysis_container.sh
+```
+
+The image contains the record-level MatchId audit, batch merger, factor
+attribution, occurrence mapping, and publication plotting dependencies. Enable
+the integrated workflow with:
+
+```bash
+nextflow run . -profile singularity \
+    --generate_transition_evidence \
+    --reference_assembly GRCh37 \
+    --analysis_container containers/python-r-analysis.sif
+```
+
+Evidence is published under `target_transition_evidence/` in the run output.
+The default comparison is `high_confidence` versus `wes_utr`, labelled
+`EX+UTR` in publication tables. Override these with
+`--transition_hci_target`, `--transition_target`, and
+`--transition_target_label`.
+
+Nextflow itself runs on the host. On the KISLD HPC installation used for the
+paper, load it with `module load anaconda` followed by `conda activate nf-core`.
+Callers, Truvari, and the combined Python/R analysis environment remain separate
+process containers; the workflow is not launched from inside a container.
+
 ## Repository Structure
 
 ```
@@ -215,16 +246,33 @@ workflows/
   sv_calling.nf                 # SV caller orchestration
   benchmarking.nf               # Truvari benchmarking across intervals
   simulate_and_benchmark.nf     # Simulated interval generation + benchmarking
+  target_transition_evidence.nf # Record-level HCI-to-target outcome audit
   analysis_and_plots.nf         # Statistics and plot generation
 modules/
   local/
     simulate_targets.nf         # Random exon-like interval simulation
     gather_statistics.nf        # R-based statistics and plotting
+    truvari_refine.nf           # Truvari refine on benchmark output
+    target_transition_evidence.nf # Audit, merge, and plot processes
   nf-core/                      # Pinned nf-core modules
+containers/
+  Singularity.python-r-analysis # Combined Python/R analysis image definition
 bin/R/
   simulate_targets.R            # Simulation algorithm (GenomicRanges-based)
   paper_plots.R                 # Publication plot generation
   functions.R                   # Shared R utilities
+bin/python/
+  target_transition_audit.py    # MatchId-based HCI-to-target transition audit
+  merge_transition_audits.py    # Merge batched audits into evidence tables
+  plot_target_boundary_mechanisms.py # Boundary-mechanism figure
+  exutr_factor_attribution.py   # EX+UTR factor attribution
+  sv_occurrence_map.py          # Per-record occurrence mapping
+  pad_target_bed.py             # Pad, clip, and merge a target BED
+  padding_transition_recovery.py # Trace losses across padded targets
+  summarize_padding_sensitivity.py # Padding sensitivity tables and plots
+  compare_metric_tables.py      # Diff two gather-statistics tables
+  target_composition.py         # Type and size composition of scored truth
+  update_submission_tables.py   # Refresh supplementary tables from a run
 preparation/
   prepare.sh                    # Master data download wrapper
   download_and_prep_GRCh37.sh   # GRCh37 data acquisition

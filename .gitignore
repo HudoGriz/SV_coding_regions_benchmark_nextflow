@@ -11,6 +11,15 @@ data/
 notes.*
 supplementary/
 
+# Manuscript, poster, and local planning material (kept out of the pipeline repo)
+sv-article/
+poster/
+poster-ESHG/
+PLAN.md
+
+# Stray job logs
+*.log
+
 # Nextflow output artifacts
 dag.dot
 dag.html
@@ -52,3 +61,4 @@ Thumbs.db
 *.fa
 *.fa.fai
 *.sif
+containers/*.sif

@@ -237,6 +237,35 @@ paper, load it with `module load anaconda` followed by `conda activate nf-core`.
 Callers, Truvari, and the combined Python/R analysis environment remain separate
 process containers; the workflow is not launched from inside a container.
 
+### Running the drivers elsewhere
+
+The scripts in `bin/` contain no absolute paths. Everything site-specific is an
+environment variable, so they run unmodified on any machine:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `SV_DATA_ROOT` | *required* | Directory holding the prepared per-assembly data |
+| `SV_PROFILE` | `singularity` | Nextflow profile to run with |
+| `SV_HPC_CONFIG` | unset | Extra Nextflow config for a local cluster |
+| `SV_ENV_MODULE` | unset | Environment module to load before running |
+| `SV_CONDA_ENV` | unset | Conda environment to activate before running |
+| `TRUVARI_SIF` | published image | Local `.sif` or registry URI overriding the Truvari container |
+| `ANALYSIS_SIF` | published image | Local `.sif` overriding the analysis container |
+| `SV_IMAGE_CACHE` | inside the output directory | Where pulled images are cached |
+
+Leaving `TRUVARI_SIF` and `ANALYSIS_SIF` unset is the reproducible choice: the
+pipeline then uses the published, immutable tags in `nextflow.config`. Setting
+either one is recorded in the run manifest along with its checksum.
+
+To reproduce the published runs on the machine that produced them:
+
+```bash
+export SV_DATA_ROOT=/path/to/prepared/data
+export SV_ENV_MODULE=anaconda SV_CONDA_ENV=nf-core SV_PROFILE=cpu
+export SV_HPC_CONFIG=/home/Software/configs/nextflow_local/configs/conf/kisld_hpc.config
+bin/run_clean_dated_benchmark.sh 2026-08-03
+```
+
 ## Repository Structure
 
 ```

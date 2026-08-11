@@ -25,7 +25,25 @@ set -euo pipefail
 run_dir=${1:?usage: $0 <clean-rerun dir> <assembly> <outdir>}
 assembly=${2:?}
 outdir=${3:?}
-sif=${TRUVARI_SIF:-/home/45483vrhovsek/sif/truvari-5.4.0-bench-overlaps-numeric.sif}
+
+# Locate the repository. Under sbatch this runs from a spool copy, so
+# BASH_SOURCE does not point into the repo; SV_REPO_ROOT and the submit
+# directory cover that case.
+repo_root=""
+for _candidate in "${SV_REPO_ROOT:-}" \
+                  "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)" \
+                  "${SLURM_SUBMIT_DIR:-}" "$PWD"; do
+    if [[ -n "$_candidate" && -f "$_candidate/bin/common.sh" ]]; then
+        repo_root=$_candidate; break
+    fi
+done
+[[ -n "$repo_root" ]] || { echo "ERROR: cannot locate the repository; set SV_REPO_ROOT" >&2; exit 1; }
+source "$repo_root/bin/common.sh"
+# TRUVARI_SIF may be a registry URI or a local path; a URI is pulled once into
+# SV_IMAGE_CACHE, which defaults to a directory inside the output.
+sif=$(resolve_image "${TRUVARI_SIF:-$TRUVARI_IMAGE_DEFAULT}" "${SV_IMAGE_CACHE:-$outdir/images}")
+engine=$(container_engine)
+export SV_CONTAINER_ENGINE="$engine" SV_TRUVARI_SIF="$sif"
 
 results="$run_dir/results-$assembly"
 work="$outdir/containment_runs"
@@ -33,7 +51,7 @@ mkdir -p "$work"
 
 echo "run_dir=$run_dir assembly=$assembly"
 echo "container=$sif"
-sha256sum "$sif"
+image_checksum "$sif"
 
 # One containment rerun per published overlap benchmark.
 find "$results/real_intervals" -mindepth 6 -maxdepth 6 -name params.json -print0 |
@@ -50,8 +68,17 @@ while IFS= read -r -d '' pj; do
     cmd=$(python3 - "$pj" "$out" <<'PY'
 import json, shlex, sys, os
 p = json.load(open(sys.argv[1]))
-sif = os.environ.get("TRUVARI_SIF", "/home/45483vrhovsek/sif/truvari-5.4.0-bench-overlaps-numeric.sif")
-a = ["singularity", "exec", "-B", "/home", "--pwd", "/tmp", sif, "truvari", "bench",
+sif = os.environ["SV_TRUVARI_SIF"]
+engine = os.environ.get("SV_CONTAINER_ENGINE", "apptainer")
+# Bind the directories the run actually touches rather than assuming the data
+# sits under /home, so this works wherever the inputs happen to live.
+binds = sorted({os.path.dirname(os.path.abspath(x)) for x in
+                (p["base"], p["comp"], p["reference"], p["includebed"],
+                 sys.argv[2])})
+a = [engine, "exec"]
+for b in binds:
+    a += ["-B", b]
+a += ["--pwd", "/tmp", sif, "truvari", "bench",
      "-b", p["base"], "-c", p["comp"], "-f", p["reference"],
      "--includebed", p["includebed"], "-o", sys.argv[2],
      "-r", str(p["refdist"]), "-p", str(p["pctseq"]), "-P", str(p["pctsize"]),
@@ -67,7 +94,7 @@ if p.get("dup_to_ins"):
 print(" ".join(shlex.quote(x) for x in a))
 PY
 )
-    TRUVARI_SIF="$sif" bash -c "$cmd" > "$work/$prefix.log" 2>&1 || {
+    bash -c "$cmd" > "$work/$prefix.log" 2>&1 || {
         echo "FAILED $prefix"; tail -20 "$work/$prefix.log"; exit 1; }
 done
 

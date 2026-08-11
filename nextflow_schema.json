@@ -181,8 +181,8 @@
                 },
                 "analysis_container": {
                     "type": "string",
-                    "default": "containers/python-r-analysis.sif",
-                    "description": "Singularity/Apptainer image containing Python and R analysis dependencies"
+                    "default": "library://blazv/benchmark-sv/python-r-analysis:py3.11-r4.4.1",
+                    "description": "Image containing the Python and R analysis dependencies. A registry URI is pulled on first use; a local path is used as-is."
                 }
             }
         },
@@ -193,6 +193,12 @@
             "description": "Parameters for Truvari benchmarking",
             "default": "",
             "properties": {
+                "truvari_container": {
+                    "type": "string",
+                    "default": "library://blazv/benchmark-sv/truvari_modded:5.4.0-overlaps-numeric",
+                    "description": "Truvari image providing the numeric --bench-overlaps option",
+                    "help_text": "A registry URI is pulled on first use; a local path is used as-is. The pipeline needs the modified Truvari from CISLD/truvari, since stock Truvari has no --bench-overlaps option."
+                },
                 "truvari_refdist": {
                     "type": "integer",
                     "default": 500,

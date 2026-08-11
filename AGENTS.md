@@ -34,9 +34,12 @@ preparation/               # Shell scripts for data download/prep
 ## Build / Run / Test Commands
 
 ```bash
-# On this HPC host, enable Nextflow first
+# Nextflow has to be on PATH. On this HPC host that means:
 module load anaconda
 conda activate nf-core
+# The bin/ drivers do this for you when SV_ENV_MODULE and SV_CONDA_ENV are set,
+# and skip it anywhere Nextflow is already installed. See the environment table
+# in README.md; no driver hardcodes a path to this machine.
 
 # Quick validation / syntax check (the CI lint step, no containers needed)
 nextflow run . -profile test_nfcore --help

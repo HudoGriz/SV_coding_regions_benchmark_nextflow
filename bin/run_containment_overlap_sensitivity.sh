@@ -25,7 +25,7 @@ set -euo pipefail
 run_dir=${1:?usage: $0 <clean-rerun dir> <assembly> <outdir>}
 assembly=${2:?}
 outdir=${3:?}
-sif=${TRUVARI_SIF:-/home/45483vrhovsek/sif/truvari-5.4.0-bench-overlaps.sif}
+sif=${TRUVARI_SIF:-/home/45483vrhovsek/sif/truvari-5.4.0-bench-overlaps-numeric.sif}
 
 results="$run_dir/results-$assembly"
 work="$outdir/containment_runs"
@@ -50,7 +50,7 @@ while IFS= read -r -d '' pj; do
     cmd=$(python3 - "$pj" "$out" <<'PY'
 import json, shlex, sys, os
 p = json.load(open(sys.argv[1]))
-sif = os.environ.get("TRUVARI_SIF", "/home/45483vrhovsek/sif/truvari-5.4.0-bench-overlaps.sif")
+sif = os.environ.get("TRUVARI_SIF", "/home/45483vrhovsek/sif/truvari-5.4.0-bench-overlaps-numeric.sif")
 a = ["singularity", "exec", "-B", "/home", "--pwd", "/tmp", sif, "truvari", "bench",
      "-b", p["base"], "-c", p["comp"], "-f", p["reference"],
      "--includebed", p["includebed"], "-o", sys.argv[2],

@@ -7,7 +7,7 @@ data_root=/home/45483vrhovsek/genome_in_bottle/SV_coding_regions_benchmark_nextf
 rerun_root="$data_root/clean-rerun-$run_date"
 hpc_config=/home/Software/configs/nextflow_local/configs/conf/kisld_hpc.config
 analysis_sif="$repo_root/containers/python-r-analysis.sif"
-truvari_sif=/home/45483vrhovsek/sif/truvari-5.4.0-bench-overlaps.sif
+truvari_sif=/home/45483vrhovsek/sif/truvari-5.4.0-bench-overlaps-numeric.sif
 
 if [[ -e "$rerun_root" ]]; then
     echo "Refusing to overwrite existing rerun: $rerun_root" >&2

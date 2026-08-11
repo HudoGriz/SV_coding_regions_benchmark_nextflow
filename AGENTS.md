@@ -172,11 +172,29 @@ Override behavior in `conf/modules.config` via `withName:` blocks.
 ## Container Configuration
 
 - Default registry: `quay.io` (Docker, Singularity, Apptainer, Podman, Charliecloud).
-- Custom Singularity containers from `library://blazv/benchmark-sv/`:
-  `r-env:4-4-1` (R environment), `truvari_modded:latest` (modified Truvari).
-- Analysis processes resolve their image from `params.analysis_container`. Build it with
-  `bin/build_python_r_analysis_container.sh`; the definition is
-  `containers/Singularity.python-r-analysis`. Built `.sif` files are gitignored.
+- Custom Singularity containers from `library://blazv/benchmark-sv/`, all signed
+  with key `6CAB5E1393B43890082A307F8D092C7DA4C18B01`:
+  - `truvari_modded:5.4.0-overlaps-numeric` - Truvari 5.4.0 with the numeric
+    `--bench-overlaps`. This is what the pipeline runs; `params.truvari_container`
+    points at it, so Nextflow pulls it on first use.
+  - `truvari_modded:5.4.0-overlaps-bool` - the boolean-option build that produced
+    the published results. Archived for provenance; the pipeline never uses it.
+    Its numeric replacement reproduces it exactly: 297 metrics over 33 benchmarks,
+    0 mismatches.
+  - `truvari_modded:5.0.0-overlaps-bool` - the superseded Truvari 5.0.0 image that
+    `latest` pointed at until 2026-08-11. Kept only so that tag's history is not lost.
+  - `python-r-analysis:py3.11-r4.4.1` - the combined Python 3.11.15 / R 4.4.1 image.
+    Both the analysis processes (`params.analysis_container`) and the preparation
+    scripts run it, so target BEDs are built under the same R environment that
+    later analyses use.
+  - `r-env:4-4-1` - superseded by `python-r-analysis` and no longer referenced
+    anywhere. Retained so older revisions of the preparation scripts still resolve.
+- Pin explicit tags, never `latest`, in anything that has to be reproducible.
+- Analysis processes resolve their image from `params.analysis_container`, which defaults
+  to the published URI above. To iterate on the image locally, rebuild it with
+  `bin/build_python_r_analysis_container.sh` and pass `--analysis_container <path>`;
+  the definition is `containers/Singularity.python-r-analysis` and built `.sif`
+  files are gitignored, so the default must stay a registry URI rather than a path.
 - `conf/modules.config` is included after the `params` block in `nextflow.config` so that
   `container = { params.analysis_container }` closures resolve without undefined-parameter warnings.
 - Per-process container overrides in `conf/modules.config`.

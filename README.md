@@ -147,7 +147,7 @@ Default parameters for SV comparison. Separate `truvari_wes_*` parameters allow 
 | `truvari_pctseq` | 0.0 | 0.0 | Min sequence similarity (0-1) |
 | `truvari_pctovl` | 0.0 | 0.0 | Min reciprocal overlap (0-1) |
 
-All Truvari runs include `--bench-overlaps --passonly --dup-to-ins` flags. The pipeline uses a [modified Truvari](https://github.com/CISLD/truvari) that allows partial overlap with target intervals (minimum 1 bp).
+All Truvari runs include `--bench-overlaps 1 --passonly --dup-to-ins` flags. The pipeline uses a [modified Truvari](https://github.com/CISLD/truvari) that allows partial overlap with target intervals. The value of `--bench-overlaps` is the minimum number of positions a call must share with a target interval; `1` is the one-base intersection the published results use, and `0` restores stock containment.
 
 ### Resource Limits
 
@@ -203,17 +203,23 @@ Combine profiles: `-profile singularity` or `-profile test_nfcore,docker`
 
 ### Target-transition evidence and publication figures
 
-Build the versioned analysis image once from the repository root:
+The analysis image is published, so nothing needs building; Nextflow pulls
+`library://blazv/benchmark-sv/python-r-analysis:py3.11-r4.4.1` on first use. It
+contains the record-level MatchId audit, batch merger, factor attribution,
+occurrence mapping, and publication plotting dependencies. Enable the integrated
+workflow with:
+
+```bash
+nextflow run . -profile singularity \
+    --generate_transition_evidence \
+    --reference_assembly GRCh37
+```
+
+To iterate on the image, rebuild it from the repository root and point the
+pipeline at the local file:
 
 ```bash
 bin/build_python_r_analysis_container.sh
-```
-
-The image contains the record-level MatchId audit, batch merger, factor
-attribution, occurrence mapping, and publication plotting dependencies. Enable
-the integrated workflow with:
-
-```bash
 nextflow run . -profile singularity \
     --generate_transition_evidence \
     --reference_assembly GRCh37 \

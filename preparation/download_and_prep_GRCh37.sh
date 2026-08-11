@@ -81,13 +81,21 @@ data_dir="${project_dir}/data"
 mkdir -p "${data_dir}"
 references_dir="${data_dir}/references"
 
+# Published, signed analysis image. Pinned to an explicit tag, never :latest, so
+# a rebuild of the image cannot silently change what preparation produces.
+ANALYSIS_IMAGE_URI="library://blazv/benchmark-sv/python-r-analysis:py3.11-r4.4.1"
+ANALYSIS_IMAGE_NAME="python-r-analysis_py3.11-r4.4.1.sif"
+
 ensure_singularity_images() {
     echo "--- Ensuring Singularity images ---"
     mkdir -p "${singularity_dir}"
     cd "${singularity_dir}"
     [ -f samtools_latest.sif ] || singularity pull --force samtools_latest.sif docker://quay.io/biocontainers/samtools:1.19--h50ea8bc_0
     [ -f bedtools_latest.sif ] || singularity pull --force bedtools_latest.sif docker://quay.io/biocontainers/bedtools:2.31.1--h13024bc_3
-    [ -f r-env_4-4-1.sif ] || singularity pull --force r-env_4-4-1.sif library://blazv/benchmark-sv/r-env:4-4-1
+    # The same combined Python/R image the benchmarking pipeline runs, so target
+    # BEDs are built under the R environment that later analyses use. It supersedes
+    # the old r-env:4-4-1 image, which carried the same R 4.4.1 and packages.
+    [ -f "${ANALYSIS_IMAGE_NAME}" ] || singularity pull --force "${ANALYSIS_IMAGE_NAME}" "${ANALYSIS_IMAGE_URI}"
 }
 
 download_phase() {
@@ -135,7 +143,8 @@ download_phase() {
 
     # Reference genome (hs37d5)
     echo "--- Downloading reference genome (hs37d5) ---"
-    wget -c -O human_hs37d5.fasta.gz ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/phase2_reference_assembly_sequence/hs37d5.fa.gz
+    # Served over https as well as ftp; ftp is commonly blocked on institutional networks.
+    wget -c -O human_hs37d5.fasta.gz https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/phase2_reference_assembly_sequence/hs37d5.fa.gz
 
     # Tandem repeat annotations
     echo "--- Downloading tandem repeat annotations ---"
@@ -187,7 +196,7 @@ postprocess_phase() {
 echo "--- Creating exome+UTR BED file ---"
 singularity exec \
     -B "${project_dir}" \
-    "${singularity_dir}/r-env_4-4-1.sif" \
+    "${singularity_dir}/${ANALYSIS_IMAGE_NAME}" \
     Rscript "${SCRIPT_DIR}/create_gencode_target_bed.R" \
         "${references_dir}/gencode.v19.annotation.gtf.gz" \
         "${references_dir}/exome_utr_gtf.bed" \

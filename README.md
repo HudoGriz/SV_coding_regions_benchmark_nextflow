@@ -237,6 +237,12 @@ paper, load it with `module load anaconda` followed by `conda activate nf-core`.
 Callers, Truvari, and the combined Python/R analysis environment remain separate
 process containers; the workflow is not launched from inside a container.
 
+> **Container engine.** The two custom images are published to a Singularity
+> library, and `library://` is not an OCI registry. Benchmarking and analysis
+> therefore require Singularity or Apptainer. The `docker`, `podman` and
+> `charliecloud` profiles can run SV calling, whose images all come from
+> `quay.io`, but not the Truvari or analysis stages.
+
 ### Running the drivers elsewhere
 
 The scripts in `bin/` contain no absolute paths. Everything site-specific is an

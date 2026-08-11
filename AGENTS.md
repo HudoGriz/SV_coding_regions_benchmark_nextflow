@@ -190,8 +190,15 @@ Override behavior in `conf/modules.config` via `withName:` blocks.
     Both the analysis processes (`params.analysis_container`) and the preparation
     scripts run it, so target BEDs are built under the same R environment that
     later analyses use.
-  - `r-env:4-4-1` - superseded by `python-r-analysis` and no longer referenced
-    anywhere. Retained so older revisions of the preparation scripts still resolve.
+  - `r-env:4-4-1` - no longer run directly by anything, but still load-bearing:
+    `containers/Singularity.python-r-analysis` bootstraps from it, so it supplies
+    the R 4.4.1 installation and R packages inside the analysis image. Do not
+    delete it from the library; the analysis image cannot be rebuilt without it.
+- The custom images are Singularity/Apptainer only. `library://` is not an OCI
+  registry, so the `docker`, `podman` and `charliecloud` profiles cannot pull
+  them and cannot run the benchmarking or analysis stages. Those profiles are
+  usable for SV calling, which is what the CI profile exercises
+  (`skip_benchmarking = true`).
 - Pin explicit tags, never `latest`, in anything that has to be reproducible.
 - Analysis processes resolve their image from `params.analysis_container`, which defaults
   to the published URI above. To iterate on the image locally, rebuild it with

@@ -20,14 +20,15 @@ conf/
 workflows/                 # Sub-workflows (SCREAMING_SNAKE_CASE names)
 modules/
   local/                   # Custom process definitions (simulate_targets, gather_statistics,
-                           #   truvari_refine, target_transition_evidence)
+                           #   truvari_refine, target_transition_evidence, pad_target_bed)
   nf-core/                 # Pinned nf-core modules (do NOT edit directly)
 lib/WorkflowHelp.groovy    # Groovy helper class
 bin/R/                     # R scripts (simulate_targets.R, paper_plots.R, functions.R)
-bin/python/                # Analysis scripts shipped in the analysis container
-bin/*.sh                   # Container build and evidence-regeneration drivers
+bin/python/                # Analysis scripts; run from the repo inside the analysis (or Truvari) image
+bin/*.sh                   # Container build, evidence-regeneration and revision-run drivers
 containers/
   Singularity.python-r-analysis  # Combined Python/R analysis image definition
+  Singularity.svanalyzer         # SVanalyzer + edlib-aligner, post-hoc comparator check only
 preparation/               # Shell scripts for data download/prep
 ```
 
@@ -209,8 +210,30 @@ Override behavior in `conf/modules.config` via `withName:` blocks.
   `container = { params.analysis_container }` closures resolve without undefined-parameter warnings.
 - Per-process container overrides in `conf/modules.config`.
 
+## Revision runs (review round 1)
+
+- Delly 1.7.3 (nf-core `delly/call`, biocontainer) runs on Illumina WGS next to
+  Manta, with Delly's exclude template (`delly_exclude`). WES stays Manta-only.
+- `SENSITIVITY_BENCHMARKS` (`--sensitivity_benchmarks`) re-scores the real
+  targets under one changed setting at a time (thresholds, containment,
+  `--extend`, padding) and publishes under `sensitivity/<setting>/`. It uses the
+  same `TRUVARI_BENCH` module; `meta.bench_overlaps` selects containment, and
+  when it is unset the primary command line is unchanged.
+- The transition-evidence and padding processes run `python3 ${projectDir}/bin/python/*.py`
+  inside the analysis image, like the R scripts. Scripts can change without a
+  new image, and a run's code is the commit, not whatever was baked into the image.
+- Drivers: `bin/submit_revision_runs.sh` / `bin/run_revision_benchmark.sh`
+  (full runs; refuse to overwrite; `SV_RESUME=1` to resume),
+  `bin/run_revision_posthoc.sh` (post-hoc tables), and
+  `bin/run_svanalyzer_posthoc.sh` (second-comparator check, never in the pipeline).
+- GRCh38 BAMs: `preparation/build_grch38_analysis_bams.sh` restricts to the
+  analysis contigs only; no flag or MAPQ filters.
+- Compute nodes have no git. The drivers record a hash of the pipeline files
+  instead; match it to a commit on the login node.
+
 ## Key Parameters
 
 Defined in `nextflow.config` with defaults, documented in `nextflow_schema.json`.
-Boolean flags: `skip_benchmarking`, `skip_pbsv`, `simulate_targets`, `gather_statistics`.
+Boolean flags: `skip_benchmarking`, `skip_pbsv`, `skip_delly`, `simulate_targets`, `gather_statistics`,
+`generate_transition_evidence`, `sensitivity_benchmarks`.
 Use `null` as default for optional file paths.

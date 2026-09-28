@@ -15,6 +15,8 @@ The pipeline evaluates SV detection performance across four sequencing platforms
 
 ```
 PREPARE_REFERENCES ─> SV_CALLING ─> BENCHMARKING ─┬─> SIMULATE_AND_BENCHMARK (optional)
+                                                   ├─> SENSITIVITY_BENCHMARKS (optional)
+                                                   ├─> TARGET_TRANSITION_EVIDENCE (optional)
                                                    └─> ANALYSIS_AND_PLOTS (optional)
 ```
 
@@ -22,14 +24,15 @@ PREPARE_REFERENCES ─> SV_CALLING ─> BENCHMARKING ─┬─> SIMULATE_AND_BEN
 2. **SV Calling** -- Call structural variants with technology-appropriate callers
 3. **Benchmarking** -- Compare calls against truth set using Truvari across all target intervals
 4. **Simulation** -- Generate 500 random exon-like interval sets and benchmark against them
-5. **Analysis** -- Compute statistics, percentile rankings, KDE outlier analysis, record-level target-transition evidence, and publication plots
+5. **Sensitivity** -- Re-score the real targets with one setting changed at a time: matching thresholds, full containment, candidate-only `--extend`, and symmetric padding
+6. **Analysis** -- Compute statistics, percentile rankings, KDE outlier analysis, record-level target-transition evidence, and publication plots
 
 ### Supported Technologies and Callers
 
 | Technology | SV Callers | Notes |
 |-----------|-----------|-------|
 | Illumina WES | Manta | Uses `--exome` flag; requires capture target BED |
-| Illumina WGS | Manta | |
+| Illumina WGS | Manta, Delly | Delly (v1.7.3) runs with its exclude template; skip with `--skip_delly` |
 | PacBio HiFi | CuteSV, Pbsv | Pbsv can be skipped with `--skip_pbsv` |
 | ONT | CuteSV, Sniffles | Sniffles supports tandem repeat annotation |
 
@@ -131,6 +134,9 @@ At least one BAM file must be provided.
 |-----------|---------|-------------|
 | `skip_benchmarking` | `false` | Skip Truvari benchmarking |
 | `skip_pbsv` | `false` | Skip Pbsv caller for PacBio data |
+| `skip_delly` | `false` | Skip Delly on Illumina WGS |
+| `delly_exclude` | `null` | Delly exclude template (downloaded by the preparation scripts) |
+| `sensitivity_benchmarks` | `false` | Re-score the real targets under alternative settings (`sensitivity_*` parameters) |
 | `simulate_targets` | `false` | Enable simulated interval analysis |
 | `num_simulations` | `100` | Number of simulated interval sets to generate |
 | `gather_statistics` | `false` | Generate publication plots and statistics tables |
@@ -143,11 +149,17 @@ Default parameters for SV comparison. Separate `truvari_wes_*` parameters allow 
 | Parameter | Default | WES Default | Description |
 |-----------|---------|-------------|-------------|
 | `truvari_refdist` | 500 | 500 | Max reference distance (bp) |
-| `truvari_pctsize` | 0.7 | 0.7 | Min size similarity (0-1) |
+| `truvari_pctsize` | 0.7 | 0.7 (generated params files: 0) | Min size similarity (0-1) |
 | `truvari_pctseq` | 0.0 | 0.0 | Min sequence similarity (0-1) |
 | `truvari_pctovl` | 0.0 | 0.0 | Min reciprocal overlap (0-1) |
 
-All Truvari runs include `--bench-overlaps 1 --passonly --dup-to-ins` flags. The pipeline uses a [modified Truvari](https://github.com/CISLD/truvari) that allows partial overlap with target intervals. The value of `--bench-overlaps` is the minimum number of positions a call must share with a target interval; `1` is the one-base intersection the published results use, and `0` restores stock containment.
+All Truvari runs include `--bench-overlaps 1 --bnddist -1 --passonly --dup-to-ins`, and keep
+Truvari's size defaults: truth records must be at least `--sizemin` 50 bp, candidates at least
+`--sizefilt` 30 bp, and both at most `--sizemax` 50 kb. A candidate of 30-49 bp may match a truth
+record but is dropped, not counted as a false positive, when it does not. `--refdist` is satisfied
+when the candidate's span lies within that distance of the truth span; `--pctseq` is applied only
+when both records are sequence-resolved. Inversions are not converted and are scored as their own
+type. Every benchmark directory keeps its full configuration in `<prefix>/params.json`. The pipeline uses a [modified Truvari](https://github.com/CISLD/truvari) that allows partial overlap with target intervals. The value of `--bench-overlaps` is the minimum number of positions a call must share with a target interval; `1` is the one-base intersection the published results use, and `0` restores stock containment.
 
 ### Resource Limits
 
@@ -164,6 +176,7 @@ All Truvari runs include `--bench-overlaps 1 --passonly --dup-to-ins` flags. The
 ├── sv_calls/                        # SV caller output VCFs
 │   ├── Illumina_WES/Manta/
 │   ├── Illumina_WGS/Manta/
+│   ├── Illumina_WGS/Delly/
 │   ├── PacBio/
 │   │   ├── CuteSV/
 │   │   └── PBSV/
@@ -172,6 +185,9 @@ All Truvari runs include `--bench-overlaps 1 --passonly --dup-to-ins` flags. The
 │       └── Sniffles/
 ├── real_intervals/                  # Truvari benchmarks on real target sets
 │   └── {technology}-{caller}-{target}/
+├── sensitivity/                     # Sensitivity benchmarks (if enabled)
+│   ├── {setting}/{technology}/{caller}/{target}/   # refdist*, pctsize*, pctseq*, containment, extend*, pad*
+│   └── target_beds/                 # Padded boundary-target BEDs
 ├── simulations/                     # Simulated interval analysis (if enabled)
 │   ├── simulated_targets/           # Generated BED files
 │   └── benchmarks/                  # Truvari results per simulation
@@ -272,6 +288,48 @@ export SV_HPC_CONFIG=/home/Software/configs/nextflow_local/configs/conf/kisld_hp
 bin/run_clean_dated_benchmark.sh 2026-08-03
 ```
 
+### Revision runs (review round 1)
+
+The review revision reran both assemblies with Delly added, the GRCh38 BAMs
+rebuilt and the sensitivity benchmarks enabled, into a new run directory that
+leaves every earlier run untouched.
+
+- `preparation/build_grch38_analysis_bams.sh` restricts the GRCh38 BAMs to the
+  contigs of the analysis reference and filters nothing else: discordant pairs,
+  supplementary alignments and reads with an unmapped mate all stay. A BAM whose
+  header already matches the reference (ONT) is used as distributed. Outputs and
+  per-BAM manifests go to `data/analysis_bams/`. The earlier `filtered_bams/`
+  (`-F 3852 -f 2` for Illumina, `-F 2308 -q 1` for long reads) are no longer used.
+- `bin/submit_revision_runs.sh <label> [GRCh37] [GRCh38]` submits one Slurm head
+  job per assembly. Each writes its params file with `generate_params.sh` and
+  runs `bin/run_revision_benchmark.sh`. That script launches each assembly from
+  its own directory under `$SV_DATA_ROOT/<label>/`, refuses to write into
+  existing results unless `SV_RESUME=1`, and records the params file, site
+  config, and a hash of the pipeline files (compute nodes may lack git).
+  `SV_DEPENDENCY_<assembly>` passes an sbatch dependency, for example to wait for
+  the BAM rebuild.
+- `bin/run_revision_posthoc.sh <run_root> <assembly>` runs every post-hoc
+  analysis of a finished run into `<run_root>/posthoc/<assembly>/`:
+  - the metrics and Truvari parameter tables;
+  - a comparison with an earlier run (`SV_COMPARE_RESULTS`);
+  - SV-type record accounting;
+  - the recall/precision decomposition with the candidate-side audit;
+  - post-matching stratification;
+  - the bootstrap and rarefied null;
+  - the sensitivity audits;
+  - composition standardisation;
+  - simulation fidelity.
+
+  The scripts are in `bin/python/` and run inside the pinned images.
+
+```bash
+export SV_DATA_ROOT=/path/to/prepared/data
+export SV_ENV_MODULE=anaconda SV_CONDA_ENV=nf-core SV_PROFILE=cpu
+export SV_HPC_CONFIG=/home/Software/configs/nextflow_local/configs/conf/kisld_hpc.config
+bin/submit_revision_runs.sh revision1-2026-09-28 GRCh37 GRCh38
+sbatch bin/run_revision_posthoc.sh "$SV_DATA_ROOT/revision1-2026-09-28" GRCh37
+```
+
 ## Repository Structure
 
 ```
@@ -338,6 +396,7 @@ If you use this pipeline, please cite:
 
 - **Truvari**: English, A.C., et al. (2022). Truvari: refined structural variant comparison preserves allelic diversity. *Genome Biology*, 23, 271.
 - **Nextflow**: Di Tommaso, P., et al. (2017). Nextflow enables reproducible computational workflows. *Nature Biotechnology*, 35, 316-319.
+- **Delly**: Rausch, T., et al. (2012). DELLY: structural variant discovery by integrated paired-end and split-read analysis. *Bioinformatics*, 28, i333-i339.
 - **Manta**: Chen, X., et al. (2016). Manta: rapid detection of structural variants and indels for germline and cancer sequencing applications. *Bioinformatics*, 32, 1220-1222.
 - **CuteSV**: Jiang, T., et al. (2020). Long-read-based human genomic structural variation detection with cuteSV. *Genome Biology*, 21, 189.
 - **Pbsv**: Pacific Biosciences. https://github.com/PacificBiosciences/pbsv

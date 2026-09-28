@@ -68,6 +68,17 @@ done
 
 mkdir -p "$run_root/logs" "$launch_dir" "$work_dir"
 manifest="$run_root/RUN_MANIFEST.$assembly.txt"
+stamp=$(date +%Y%m%dT%H%M%S)
+
+# Compute nodes may have no git, so the pipeline code is also identified by a
+# hash of the files that define it. The per-file listing lets any commit be
+# matched to the run later: hash the same paths in a checkout of that commit.
+pipeline_files="$run_root/logs/pipeline_files.$assembly.$stamp.sha256"
+(
+    cd "$repo_root"
+    find main.nf nextflow.config nextflow_schema.json modules.json conf modules workflows bin preparation \
+        -type f ! -name '*.pyc' ! -path '*/__pycache__/*' -print0 | sort -z | xargs -0 sha256sum
+) > "$pipeline_files"
 {
     echo "run_label=$run_label"
     echo "assembly=$assembly"
@@ -75,10 +86,15 @@ manifest="$run_root/RUN_MANIFEST.$assembly.txt"
     echo "resume=$resume"
     echo "slurm_job_id=${SLURM_JOB_ID:-}"
     echo "pipeline=$repo_root"
-    git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null | sed 's/^/git_branch=/' || true
-    git -C "$repo_root" rev-parse HEAD 2>/dev/null | sed 's/^/git_head=/' || true
-    git -C "$repo_root" status --porcelain=v1 | sha256sum | sed 's/  -$/  git_status_porcelain/' || true
-    git -C "$repo_root" diff --binary | sha256sum | sed 's/  -$/  git_tracked_diff/' || true
+    echo "pipeline_tree_sha256=$(sha256sum < "$pipeline_files" | cut -d' ' -f1)  ($(wc -l < "$pipeline_files") files, listed in $pipeline_files)"
+    if command -v git >/dev/null 2>&1; then
+        git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null | sed 's/^/git_branch=/' || true
+        git -C "$repo_root" rev-parse HEAD 2>/dev/null | sed 's/^/git_head=/' || true
+        git -C "$repo_root" status --porcelain=v1 | sha256sum | sed 's/  -$/  git_status_porcelain/' || true
+        git -C "$repo_root" diff --binary | sha256sum | sed 's/  -$/  git_tracked_diff/' || true
+    else
+        echo "git=unavailable on $(hostname); identify the commit with pipeline_tree_sha256"
+    fi
     echo "params_file=$params_file"
     sha256sum "$params_file"
     echo "hpc_config=${hpc_config:-<none>}"
@@ -91,10 +107,11 @@ manifest="$run_root/RUN_MANIFEST.$assembly.txt"
     echo "----"
 } >> "$manifest"
 # Snapshot the exact inputs the run was started with, one copy per start.
-stamp=$(date +%Y%m%dT%H%M%S)
 cp "$params_file" "$run_root/logs/params.$assembly.$stamp.yaml"
-git -C "$repo_root" status --porcelain=v1 > "$run_root/logs/source_status.$assembly.$stamp.txt" || true
-git -C "$repo_root" diff --binary > "$run_root/logs/source_tracked.$assembly.$stamp.diff" || true
+if command -v git >/dev/null 2>&1; then
+    git -C "$repo_root" status --porcelain=v1 > "$run_root/logs/source_status.$assembly.$stamp.txt" || true
+    git -C "$repo_root" diff --binary > "$run_root/logs/source_tracked.$assembly.$stamp.diff" || true
+fi
 
 # Bring Nextflow onto PATH; both steps are skipped when unset.
 if [[ -n "${SV_ENV_MODULE:-}" ]]; then

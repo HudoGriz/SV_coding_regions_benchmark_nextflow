@@ -27,9 +27,22 @@ FIELDS = [
 ]
 
 
+PARAMETER_ROWS: list[dict] = []
+
+
 def summary_row(path: Path, assembly: str, setting: str, target_set: str,
                 technology: str, caller: str, target: str) -> dict:
     data = json.loads(path.read_text())
+    # The bench directory keeps the full Truvari configuration next to the summary.
+    params = path.parent / path.name[:-len(".summary.json")] / "params.json"
+    if params.exists():
+        saved = json.loads(params.read_text())
+        PARAMETER_ROWS.append({
+            "assembly": assembly, "setting": setting, "target_set": target_set, "target": target,
+            "pipeline": f"{technology} {caller}",
+            **{key: value for key, value in sorted(saved.items())
+               if key not in ("base", "comp", "output", "includebed", "reference")},
+        })
     return {
         "assembly": assembly, "setting": setting, "target_set": target_set,
         "target": target, "pipeline": f"{technology} {caller}",
@@ -59,6 +72,8 @@ def main():
     parser.add_argument("--assembly", required=True)
     parser.add_argument("--include-simulations", action="store_true")
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--params-output", type=Path,
+                        help="also write every benchmark's Truvari parameters (real targets only)")
     args = parser.parse_args()
 
     rows = real_rows(args.results / "real_intervals", args.assembly, "primary", "real")
@@ -95,6 +110,15 @@ def main():
         writer.writeheader()
         writer.writerows(rows)
     print(f"wrote {len(rows)} rows to {args.output}")
+
+    if args.params_output:
+        real = [row for row in PARAMETER_ROWS if row["target_set"] == "real"]
+        fields = sorted({key for row in real for key in row},
+                        key=lambda k: (k not in ("assembly", "setting", "target_set", "target", "pipeline"), k))
+        with args.params_output.open("w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t", restval="")
+            writer.writeheader()
+            writer.writerows(real)
 
 
 if __name__ == "__main__":

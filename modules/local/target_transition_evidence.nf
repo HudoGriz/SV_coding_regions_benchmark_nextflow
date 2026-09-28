@@ -1,3 +1,8 @@
+// The scripts run from the repository (bin/python) inside the analysis
+// container, which supplies the pinned Python environment. That mirrors how
+// the R scripts are run, and means the code that produced a result is the code
+// at the commit recorded in the run manifest, not a copy baked into the image.
+
 process TARGET_TRANSITION_AUDIT {
     tag "${target_meta.technology}:${target_meta.tool}:${target_meta.target}"
     label 'process_medium'
@@ -20,7 +25,7 @@ process TARGET_TRANSITION_AUDIT {
     cp ${hci_files.join(' ')} hci/
     cp ${target_files.join(' ')} target/
 
-    target-transition-audit \
+    python3 ${projectDir}/bin/python/target_transition_audit.py \
         --assembly '${assembly}' \
         --hci-bench hci \
         --target-bench target \
@@ -45,7 +50,7 @@ process MERGE_TARGET_TRANSITION_EVIDENCE {
     """
     mkdir -p batches
     cp ${transition_tables.join(' ')} batches/
-    merge-transition-audits \
+    python3 ${projectDir}/bin/python/merge_transition_audits.py \
         --input-dir batches \
         --prefix target_transition_evidence
     """
@@ -64,7 +69,7 @@ process PLOT_TARGET_TRANSITION_EVIDENCE {
     script:
     """
     mkdir -p figures
-    plot-target-boundary-mechanisms \
+    python3 ${projectDir}/bin/python/plot_target_boundary_mechanisms.py \
         --transitions ${merged_transitions} \
         --output-dir figures
     """
@@ -92,7 +97,7 @@ process SIMULATION_TRANSITION_AUDIT {
     cp ${hci_files.join(' ')} hci/
     cp ${target_files.join(' ')} target/
 
-    target-transition-audit \
+    python3 ${projectDir}/bin/python/target_transition_audit.py \
         --assembly '${assembly}' \
         --hci-bench hci \
         --target-bench target \
@@ -117,7 +122,7 @@ process MERGE_SIMULATION_TRANSITION_EVIDENCE {
     """
     mkdir -p batches
     cp ${transition_tables.join(' ')} batches/
-    merge-transition-audits \
+    python3 ${projectDir}/bin/python/merge_transition_audits.py \
         --input-dir batches \
         --prefix simulation_transition_evidence
     """

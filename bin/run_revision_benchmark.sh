@@ -3,7 +3,7 @@
 #SBATCH --partition=cpu
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
-#SBATCH --time=14-00:00:00
+#SBATCH --time=7-00:00:00
 #
 # Run the full pipeline for one assembly into a new run directory:
 #

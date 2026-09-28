@@ -34,7 +34,7 @@ for assembly in "${assemblies[@]}"; do
         --parsable
         --job-name="sv_${run_label}_${assembly}"
         --partition="${SV_PARTITION:-cpu}"
-        --cpus-per-task=2 --mem=8G --time=14-00:00:00
+        --cpus-per-task=2 --mem=8G --time=7-00:00:00
         --output="$log_dir/head_${assembly}.%j.out"
         --export=ALL,SV_PARAMS_FILE="$params",SV_REPO_ROOT="$repo_root"
     )

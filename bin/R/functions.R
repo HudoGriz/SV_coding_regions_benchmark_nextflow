@@ -5,7 +5,8 @@
 my_colors <- c(
     "PacBio CuteSV" = "#ad2078", "PacBio Pbsv" = "#ea94c5ff",
     "ONT CuteSV" = "#007ba5", "ONT Sniffles" = "#9dcbe8ff",
-    "Illumina WGS Manta" = "#ffb441", "Illumina WES Manta" = "#616161"
+    "Illumina WGS Manta" = "#ffb441", "Illumina WES Manta" = "#616161",
+    "Illumina WGS Delly" = "#8c510a"
 )
 
 # Load and process real intervals data
@@ -150,10 +151,11 @@ annotate_data <- function(plot_data) {
     # Clean tech names (remove _WGS and _WES suffixes)
     plot_data$tech_clean <- gsub("_WGS|_WES", "", plot_data$tech)
     
-    # Map caller values to display labels (handle WES vs WGS Manta)
+    # Map caller values to display labels. Illumina callers carry the assay,
+    # since Manta runs on both WES and WGS ("WES Manta", "WGS Manta", "WGS Delly").
     plot_data$caller_display <- ifelse(
-        plot_data$caller == "Manta" & grepl("_WES", plot_data$tech), "WES Manta",
-        ifelse(plot_data$caller == "Manta" & grepl("_WGS", plot_data$tech), "WGS Manta",
+        grepl("_WES", plot_data$tech), paste("WES", plot_data$caller),
+        ifelse(grepl("_WGS", plot_data$tech), paste("WGS", plot_data$caller),
         ifelse(is.na(plot_data$caller), NA, plot_data$caller)))
     
     # Create factor with available levels

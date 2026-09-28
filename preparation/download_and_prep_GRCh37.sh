@@ -150,6 +150,11 @@ download_phase() {
     echo "--- Downloading tandem repeat annotations ---"
     wget -c https://raw.githubusercontent.com/PacificBiosciences/pbsv/master/annotations/human_hs37d5.trf.bed
 
+    # Delly exclude template (telomeres, centromeres), pinned to the Delly
+    # release in the pipeline's container so the two cannot drift apart.
+    echo "--- Downloading Delly exclude template (GRCh37) ---"
+    wget -c -O delly_human.hg19.excl.tsv https://raw.githubusercontent.com/dellytools/delly/v1.7.3/excludeTemplates/human.hg19.excl.tsv
+
     # GENCODE GTF for coding regions
     echo "--- Downloading GENCODE v19 GTF ---"
     wget -c https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_19/gencode.v19.annotation.gtf.gz

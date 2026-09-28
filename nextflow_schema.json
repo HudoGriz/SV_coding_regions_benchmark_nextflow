@@ -110,6 +110,18 @@
                     "description": "Skip PBSV calling (for test data without proper PacBio headers)",
                     "help_text": "PBSV requires proper PacBio BAM headers. Set to true when using test data."
                 },
+                "skip_delly": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Skip Delly, the second short-read caller, on Illumina WGS",
+                    "help_text": "Delly runs on Illumina WGS only; WES is called with Manta alone."
+                },
+                "delly_exclude": {
+                    "type": "string",
+                    "format": "file-path",
+                    "description": "Delly exclude template (telomeres, centromeres)",
+                    "help_text": "Delly's excludeTemplates file for the assembly, from the Delly release the container runs. The preparation scripts download it."
+                },
                 "skip_benchmarking": {
                     "type": "boolean",
                     "default": false,
@@ -174,6 +186,49 @@
                     "type": "boolean",
                     "default": false,
                     "description": "Include capture-restricted Illumina WES in the transition audit"
+                },
+                "sensitivity_benchmarks": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Re-score the real targets under alternative benchmark settings",
+                    "help_text": "Each setting changes one thing relative to the primary configuration. Results publish under sensitivity/<setting>/ and feed no headline table."
+                },
+                "sensitivity_targets": {
+                    "type": "string",
+                    "default": "high_confidence,gene_panel,wes_utr",
+                    "description": "Real targets scored under the threshold and membership settings"
+                },
+                "sensitivity_refdist": {
+                    "type": "string",
+                    "default": "100,200,1000",
+                    "description": "Comma-separated alternative --refdist values"
+                },
+                "sensitivity_pctsize": {
+                    "type": "string",
+                    "default": "0.5,0.9",
+                    "description": "Comma-separated alternative --pctsize values"
+                },
+                "sensitivity_pctseq": {
+                    "type": "string",
+                    "default": "0.7",
+                    "description": "Comma-separated alternative --pctseq values",
+                    "help_text": "Truvari applies sequence similarity only when both records are sequence-resolved."
+                },
+                "sensitivity_containment": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Also score full-containment membership (--bench-overlaps 0)"
+                },
+                "sensitivity_extend": {
+                    "type": "string",
+                    "default": "20,50,100,200,500",
+                    "description": "Candidate-only boundary extensions (Truvari --extend) for transition_target",
+                    "help_text": "The truth set and its denominator do not change; candidates up to N bp outside the target may match, and unmatched ones there are not counted as false positives."
+                },
+                "sensitivity_padding": {
+                    "type": "string",
+                    "default": "0,20,50,100,200,300,500",
+                    "description": "Symmetric paddings of transition_target, clipped to the broad target"
                 },
                 "reference_assembly": {
                     "type": "string",

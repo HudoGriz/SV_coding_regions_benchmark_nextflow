@@ -8,6 +8,7 @@
 
 include { MANTA_GERMLINE as MANTA_WES } from '../modules/nf-core/manta/germline/main'
 include { MANTA_GERMLINE as MANTA_WGS } from '../modules/nf-core/manta/germline/main'
+include { DELLY_CALL } from '../modules/nf-core/delly/call/main'
 include { CUTESV as CUTESV_PACBIO } from '../modules/nf-core/cutesv/main'
 include { CUTESV as CUTESV_ONT } from '../modules/nf-core/cutesv/main'
 include { PBSV_DISCOVER } from '../modules/nf-core/pbsv/discover/main'
@@ -164,6 +165,26 @@ workflow SV_CALLING {
         ch_all_vcfs = ch_all_vcfs.mix(
             MANTA_WGS.out.diploid_sv_vcf.join(MANTA_WGS.out.diploid_sv_vcf_tbi)
         )
+
+        //
+        // Illumina WGS - Delly, the second short-read caller. WES is left to
+        // Manta alone: Delly is not designed for capture data.
+        //
+        if (!params.skip_delly) {
+            def delly_exclude = params.delly_exclude ? file(params.delly_exclude, checkIfExists: true) : []
+            DELLY_CALL(
+                ch_illumina_wgs_bam.map { meta, bam, bai, target_bed, target_tbi ->
+                    [[id: meta.id, technology: meta.technology, tool: 'Delly'], bam, bai, [], [], delly_exclude]
+                },
+                ch_fasta.map { f -> [[id: 'fasta'], f] },
+                ch_fasta_fai.map { f -> [[id: 'fai'], f] },
+                'vcf'
+            )
+
+            ch_all_vcfs = ch_all_vcfs.mix(
+                DELLY_CALL.out.bcf.join(DELLY_CALL.out.csi)
+            )
+        }
     }
     
     //

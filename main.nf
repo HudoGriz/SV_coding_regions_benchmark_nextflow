@@ -24,6 +24,7 @@ include { BENCHMARKING } from './workflows/benchmarking'
 include { SIMULATE_AND_BENCHMARK } from './workflows/simulate_and_benchmark'
 include { ANALYSIS_AND_PLOTS } from './workflows/analysis_and_plots'
 include { TARGET_TRANSITION_EVIDENCE } from './workflows/target_transition_evidence'
+include { SENSITIVITY_BENCHMARKS } from './workflows/sensitivity_benchmarks'
 
 /*
 ========================================================================================
@@ -63,6 +64,8 @@ workflow {
           --outdir               Output directory (default: results)
           --run_name             Run name (default: benchmarking_run)
           --tandem_repeats       Tandem repeats BED file (for Sniffles)
+          --skip_delly           Skip Delly on Illumina WGS (default: false)
+          --delly_exclude        Delly exclude template (telomeres, centromeres)
           
         Simulation Options:
           --simulate_targets     Enable target region simulation (default: false)
@@ -71,6 +74,7 @@ workflow {
         Analysis Options:
           --gather_statistics    Generate statistics and plots (default: false)
           --generate_transition_evidence  Audit target-boundary transitions and create figures
+          --sensitivity_benchmarks        Re-score the real targets under alternative settings
         
         Profiles:
           test_nfcore            Run with nf-core test data
@@ -108,7 +112,9 @@ workflow {
     // Log which technologies are being analyzed
     def technologies = []
     if (params.illumina_wes_bam) technologies << "Illumina WES (Manta)"
-    if (params.illumina_wgs_bam) technologies << "Illumina WGS (Manta)"
+    if (params.illumina_wgs_bam) {
+        technologies << (params.skip_delly ? "Illumina WGS (Manta only - Delly skipped)" : "Illumina WGS (Manta, Delly)")
+    }
     if (params.pacbio_bam) {
         if (params.skip_pbsv) {
             technologies << "PacBio (CuteSV only - PBSV skipped)"
@@ -170,6 +176,20 @@ workflow {
         log.info "Skipping Truvari benchmarking (benchmark_vcf=${params.benchmark_vcf}, skip_benchmarking=${params.skip_benchmarking})"
     }
     
+    //
+    // SUBWORKFLOW: Sensitivity benchmarks on the real targets (optional)
+    //
+    if (params.sensitivity_benchmarks && params.benchmark_vcf && !params.skip_benchmarking) {
+        SENSITIVITY_BENCHMARKS(
+            SV_CALLING.out.vcfs,
+            ch_targets,
+            ch_benchmark_vcf,
+            ch_benchmark_vcf_tbi,
+            ch_fasta,
+            ch_fasta_fai
+        )
+    }
+
     //
     // SUBWORKFLOW: Simulation and benchmarking (optional)
     //

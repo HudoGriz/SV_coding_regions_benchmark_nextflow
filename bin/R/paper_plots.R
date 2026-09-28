@@ -320,7 +320,7 @@ if (!has_real && !has_sim) {
     if (has_real) {
         tryCatch({
             real_data_wgs <- real_data[real_data$caller_display %in% 
-                                    c("WES Manta", "WGS Manta", "Sniffles", "Pbsv", "CuteSV"), ]
+                                    c("WES Manta", "WGS Manta", "WGS Delly", "Sniffles", "Pbsv", "CuteSV"), ]
         
         if (nrow(real_data_wgs) > 0) {
             real_data_wgs$tech_caller <- paste(real_data_wgs$tech_clean, real_data_wgs$caller_display)

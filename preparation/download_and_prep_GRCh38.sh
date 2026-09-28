@@ -144,6 +144,11 @@ download_phase() {
   echo "--- Downloading GRCh38 tandem repeat annotations ---"
   wget -c https://raw.githubusercontent.com/PacificBiosciences/pbsv/refs/heads/master/annotations/human_GRCh38_no_alt_analysis_set.trf.bed
 
+  # Delly exclude template (telomeres, centromeres), pinned to the Delly
+  # release in the pipeline's container so the two cannot drift apart.
+  echo "--- Downloading Delly exclude template (GRCh38) ---"
+  wget -c -O delly_human.hg38.excl.tsv https://raw.githubusercontent.com/dellytools/delly/v1.7.3/excludeTemplates/human.hg38.excl.tsv
+
   # GENCODE GTF for coding regions. Pinned to release_49; the latest_release
   # path is a moving target that 404s for v49 once GENCODE publishes v50.
   echo "--- Downloading GENCODE v49 GTF ---"

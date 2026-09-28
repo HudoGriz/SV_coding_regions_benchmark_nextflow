@@ -118,6 +118,7 @@ if [[ "${GENOME}" == "GRCh37" ]]; then
     GENE_PANEL=$(find_file_with_fallback "${REFS}/Paediatric_disorders.HG002_SVs_Tier1.GRCh37.bed" "Paediatric_disorders.HG002_SVs_Tier1.GRCh37.bed")
     WES_UTR=$(find_file "${REFS}/exome_utr_gtf.HG002_SVs_Tier1.bed")
     TANDEM_REPEATS=$(find_file "${REFS}/human_hs37d5.trf.bed")
+    DELLY_EXCLUDE=$(find_file "${REFS}/delly_human.hg19.excl.tsv")
     RUN_NAME="GRCh37"
 else
     # GRCh38
@@ -145,6 +146,7 @@ else
     GENE_PANEL=$(find_file_with_fallback "${REFS}/Paediatric_disorders.HG002_SVs_Tier1.GRCh38.bed" "Paediatric_disorders.HG002_SVs_Tier1.GRCh38.bed")
     WES_UTR=$(find_file "${REFS}/exome_utr_gtf.GRCh38_HG002-T2TQ100-V1.0_stvar.bed")
     TANDEM_REPEATS=$(find_file "${REFS}/human_GRCh38_no_alt_analysis_set.trf.bed")
+    DELLY_EXCLUDE=$(find_file "${REFS}/delly_human.hg38.excl.tsv")
     RUN_NAME="GRCh38"
 fi
 
@@ -232,6 +234,11 @@ YAML_HEADER
     # Tandem repeats
     echo "# Tandem repeat annotations (recommended for Sniffles)"
     yaml_path "tandem_repeats" "${TANDEM_REPEATS}"
+    echo ""
+
+    # Delly exclude template
+    echo "# Delly exclude template (telomeres, centromeres)"
+    yaml_path "delly_exclude" "${DELLY_EXCLUDE}"
     echo ""
 
     # Truvari parameters

@@ -29,7 +29,7 @@ set -euo pipefail
 #       Illumina_wgs/bam_GRCh38/   Illumina WGS BAMs + indices
 #       Pacbio/bam_GRCh38/          PacBio HiFi BAM + index
 #       ONT/bam_GRCh38/             ONT BAM + index
-#       filtered_bams/              Filtered BAMs + indices (GRCh38)
+#       analysis_bams/              BAMs restricted to the analysis contigs + manifests
 #       references/                  Reference genome, truth sets, BED files
 #   <singularity_images_directory>/
 #     *.sif                    Singularity container images
@@ -186,82 +186,19 @@ postprocess_phase() {
       tabix -p vcf "${references_dir}/GRCh38_HG002-T2TQ100-V1.0_stvar.vcf.gz"
   fi
 
-# ---- BAM filtering (GRCh38 only, independent of GRCh37 workflow) ----
-echo "--- Filtering GRCh38 BAMs ---"
-
-SAMTOOLS_IMAGE="${singularity_dir}/samtools_latest.sif"
-REFERENCE="${references_dir}/human_GRCh38_no_alt_analysis_set.fasta"
-filtered_dir="${data_dir}/filtered_bams"
-mkdir -p "${filtered_dir}"
-
-CHR_LIST=$(awk '{print $1}' "${REFERENCE}.fai" | tr '\n' ' ')
-
-filter_bam_with_header() {
-  local input_bam="$1"
-  local output_bam="$2"
-  local threads="${3:-4}"
-
-  echo "Filtering paired-end BAM: ${input_bam}"
-
-  (
-    singularity exec "${SAMTOOLS_IMAGE}" samtools view -H "${input_bam}" | grep -v "^@SQ"
-    for chr in ${CHR_LIST}; do
-      singularity exec "${SAMTOOLS_IMAGE}" samtools view -H "${input_bam}" | grep "^@SQ" | grep -w "SN:${chr}"
-    done
-  ) > "${output_bam}.header.sam"
-
-  singularity exec "${SAMTOOLS_IMAGE}" samtools view -@ "${threads}" -F 3852 -f 2 "${input_bam}" ${CHR_LIST} | \
-    cat "${output_bam}.header.sam" - | \
-    singularity exec "${SAMTOOLS_IMAGE}" samtools view -b -@ "${threads}" -o "${output_bam}"
-
-  rm -f "${output_bam}.header.sam"
-  singularity exec "${SAMTOOLS_IMAGE}" samtools index -@ "${threads}" "${output_bam}"
-}
-
-filter_bam_pacbio() {
-  local input_bam="$1"
-  local output_bam="$2"
-  local threads="${3:-4}"
-
-  echo "Filtering long-read BAM: ${input_bam}"
-
-  (
-    singularity exec "${SAMTOOLS_IMAGE}" samtools view -H "${input_bam}" | grep -v "^@SQ"
-    for chr in ${CHR_LIST}; do
-      singularity exec "${SAMTOOLS_IMAGE}" samtools view -H "${input_bam}" | grep "^@SQ" | grep -w "SN:${chr}"
-    done
-  ) > "${output_bam}.header.sam"
-
-  singularity exec "${SAMTOOLS_IMAGE}" samtools view -@ "${threads}" -F 2308 -q 1 "${input_bam}" ${CHR_LIST} | \
-    cat "${output_bam}.header.sam" - | \
-    singularity exec "${SAMTOOLS_IMAGE}" samtools view -b -@ "${threads}" -o "${output_bam}"
-
-  rm -f "${output_bam}.header.sam"
-  singularity exec "${SAMTOOLS_IMAGE}" samtools index -@ "${threads}" "${output_bam}"
-}
-
-illumina_raw_bam="${data_dir}/Illumina_wgs/bam_GRCh38/HG002.GRCh38.60x.1.bam"
-pacbio_raw_bam="${data_dir}/Pacbio/bam_GRCh38/HG002_PacBio-HiFi-Revio_20231031_48x_GRCh38-GIABv3.bam"
-ont_raw_bam="${data_dir}/ONT/bam_GRCh38/HG002_GRCh38_ONT-UL_UCSC_20200508.phased.bam"
-
-illumina_filtered_bam="${filtered_dir}/HG002.Illumina.60.filtered.strict.bam"
-pacbio_filtered_bam="${filtered_dir}/HG002.PacBio.filtered.header.strict.pacbiospec.bam"
-ont_filtered_bam="${filtered_dir}/HG002.ONT.filtered.header.strict.longread.bam"
-
-filter_bam_with_header \
-  "${illumina_raw_bam}" \
-  "${illumina_filtered_bam}" \
-  30
-
-filter_bam_pacbio \
-  "${pacbio_raw_bam}" \
-  "${pacbio_filtered_bam}" \
-  30
-
-filter_bam_pacbio \
-  "${ont_raw_bam}" \
-  "${ont_filtered_bam}" \
-  30
+# ---- Restrict BAMs to the analysis contigs (GRCh38 only) ----
+# The Illumina and PacBio BAMs carry decoy and HLA contigs that the no-alt
+# analysis reference lacks. Only those contigs are removed; no read is filtered
+# on its flags or mapping quality. See build_grch38_analysis_bams.sh.
+echo "--- Restricting GRCh38 BAMs to the analysis contigs ---"
+declare -A bam_labels=([illumina]=Illumina [pacbio]=PacBio [ont]=ONT)
+for tech in illumina pacbio ont; do
+  if [ -f "${data_dir}/analysis_bams/${bam_labels[$tech]}.manifest.tsv" ]; then
+    echo "Already built: ${tech}"
+    continue
+  fi
+  bash "${SCRIPT_DIR}/build_grch38_analysis_bams.sh" "${project_dir}" "${singularity_dir}" --only "${tech}" --threads 30
+done
 
 # Create exome+UTR BED file (no --strip-chr: GRCh38 uses chr1,chr2,... natively)
 echo "--- Creating exome+UTR BED file ---"

@@ -124,9 +124,13 @@ else
     FASTA=$(find_file "${REFS}/human_GRCh38_no_alt_analysis_set.fasta")
     ILLUMINA_WES_BAM=""  # No WES available for GRCh38
     WES_SEQ_TARGETS=""
-    ILLUMINA_WGS_BAM=$(find_file "${DATA_DIR}/filtered_bams/HG002.Illumina.60.filtered.strict.bam")
-    PACBIO_BAM=$(find_file "${DATA_DIR}/filtered_bams/HG002.PacBio.filtered.header.strict.pacbiospec.bam")
-    ONT_BAM=$(find_file "${DATA_DIR}/filtered_bams/HG002.ONT.filtered.header.strict.longread.bam")
+    # BAMs restricted to the analysis contigs by build_grch38_analysis_bams.sh.
+    # A technology without one (ONT, whose header already matches the
+    # reference) falls back to the BAM as distributed. The older strict-filter
+    # BAMs in filtered_bams/ are deliberately never picked up.
+    ILLUMINA_WGS_BAM=$(find_file "${DATA_DIR}/analysis_bams/HG002.Illumina.GRCh38.analysis_contigs.bam")
+    PACBIO_BAM=$(find_file "${DATA_DIR}/analysis_bams/HG002.PacBio.GRCh38.analysis_contigs.bam")
+    ONT_BAM=$(find_file "${DATA_DIR}/analysis_bams/HG002.ONT.GRCh38.analysis_contigs.bam")
     if [[ -z "${ILLUMINA_WGS_BAM}" ]]; then
         ILLUMINA_WGS_BAM=$(find_file "${DATA_DIR}/Illumina_wgs/bam_GRCh38/HG002.GRCh38.60x.1.bam")
     fi

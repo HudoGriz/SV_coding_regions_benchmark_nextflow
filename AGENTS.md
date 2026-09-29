@@ -227,7 +227,8 @@ Override behavior in `conf/modules.config` via `withName:` blocks.
   `bin/run_revision_posthoc.sh` (post-hoc tables), and
   `bin/run_svanalyzer_posthoc.sh` (second-comparator check, never in the pipeline).
 - GRCh38 BAMs: `preparation/build_grch38_analysis_bams.sh` restricts to the
-  analysis contigs only; no flag or MAPQ filters.
+  analysis contigs, then removes SA entries naming the dropped contigs; no flag
+  or MAPQ filters. The pipeline reads the `*.sa_filtered.bam` outputs.
 - Compute nodes have no git. The drivers record a hash of the pipeline files
   instead; match it to a commit on the login node.
 

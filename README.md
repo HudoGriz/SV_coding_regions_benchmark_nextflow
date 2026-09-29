@@ -296,10 +296,14 @@ leaves every earlier run untouched.
 
 - `preparation/build_grch38_analysis_bams.sh` restricts the GRCh38 BAMs to the
   contigs of the analysis reference and filters nothing else: discordant pairs,
-  supplementary alignments and reads with an unmapped mate all stay. A BAM whose
-  header already matches the reference (ONT) is used as distributed. Outputs and
-  per-BAM manifests go to `data/analysis_bams/`. The earlier `filtered_bams/`
-  (`-F 3852 -f 2` for Illumina, `-F 2308 -q 1` for long reads) are no longer used.
+  supplementary alignments and reads with an unmapped mate all stay. A second
+  stage (`strip_absent_sa_entries.py`) removes the SA-tag entries that still
+  point at a dropped contig, which pbsv otherwise aborts on; it keeps every
+  record. A BAM whose header already matches the reference (ONT) is used as
+  distributed. Outputs and per-BAM manifests go to `data/analysis_bams/`; the
+  `*.analysis_contigs.sa_filtered.bam` files are the pipeline inputs. The earlier
+  `filtered_bams/` (`-F 3852 -f 2` for Illumina, `-F 2308 -q 1` for long reads)
+  are no longer used.
 - `bin/submit_revision_runs.sh <label> [GRCh37] [GRCh38]` submits one Slurm head
   job per assembly. Each writes its params file with `generate_params.sh` and
   runs `bin/run_revision_benchmark.sh`. That script launches each assembly from

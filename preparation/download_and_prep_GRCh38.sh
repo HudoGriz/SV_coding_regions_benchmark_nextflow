@@ -193,15 +193,11 @@ postprocess_phase() {
 
 # ---- Restrict BAMs to the analysis contigs (GRCh38 only) ----
 # The Illumina and PacBio BAMs carry decoy and HLA contigs that the no-alt
-# analysis reference lacks. Only those contigs are removed; no read is filtered
-# on its flags or mapping quality. See build_grch38_analysis_bams.sh.
+# analysis reference lacks. Only those contigs, and the SA entries that point at
+# them, are removed; no read is filtered on its flags or mapping quality. See
+# build_grch38_analysis_bams.sh, which skips any stage already built.
 echo "--- Restricting GRCh38 BAMs to the analysis contigs ---"
-declare -A bam_labels=([illumina]=Illumina [pacbio]=PacBio [ont]=ONT)
 for tech in illumina pacbio ont; do
-  if [ -f "${data_dir}/analysis_bams/${bam_labels[$tech]}.manifest.tsv" ]; then
-    echo "Already built: ${tech}"
-    continue
-  fi
   bash "${SCRIPT_DIR}/build_grch38_analysis_bams.sh" "${project_dir}" "${singularity_dir}" --only "${tech}" --threads 30
 done
 

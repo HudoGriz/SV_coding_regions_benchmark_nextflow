@@ -34,6 +34,14 @@ process TARGET_TRANSITION_AUDIT {
         --pipeline '${pipeline}' \
         --prefix evidence/${safe_id}
     """
+
+    stub:
+    def safe_id = pair_id.replaceAll(/[^A-Za-z0-9_.-]/, '_')
+    """
+    mkdir -p evidence
+    touch evidence/${safe_id}.transitions.tsv evidence/${safe_id}.mechanisms.tsv evidence/${safe_id}.boundary.tsv
+    echo '{}' > evidence/${safe_id}.metadata.json
+    """
 }
 
 process MERGE_TARGET_TRANSITION_EVIDENCE {
@@ -54,6 +62,11 @@ process MERGE_TARGET_TRANSITION_EVIDENCE {
         --input-dir batches \
         --prefix target_transition_evidence
     """
+
+    stub:
+    """
+    touch target_transition_evidence.transitions.tsv target_transition_evidence.mechanisms.tsv
+    """
 }
 
 process PLOT_TARGET_TRANSITION_EVIDENCE {
@@ -72,6 +85,12 @@ process PLOT_TARGET_TRANSITION_EVIDENCE {
     python3 ${projectDir}/bin/python/plot_target_boundary_mechanisms.py \
         --transitions ${merged_transitions} \
         --output-dir figures
+    """
+
+    stub:
+    """
+    mkdir -p figures
+    touch figures/target_boundary_mechanisms.png
     """
 }
 
@@ -106,6 +125,14 @@ process SIMULATION_TRANSITION_AUDIT {
         --pipeline '${pipeline}' \
         --prefix simulation_evidence/${safe_id}
     """
+
+    stub:
+    def safe_id = pair_id.replaceAll(/[^A-Za-z0-9_.-]/, '_')
+    """
+    mkdir -p simulation_evidence
+    touch simulation_evidence/${safe_id}.transitions.tsv simulation_evidence/${safe_id}.mechanisms.tsv simulation_evidence/${safe_id}.boundary.tsv
+    echo '{}' > simulation_evidence/${safe_id}.metadata.json
+    """
 }
 
 process MERGE_SIMULATION_TRANSITION_EVIDENCE {
@@ -125,5 +152,10 @@ process MERGE_SIMULATION_TRANSITION_EVIDENCE {
     python3 ${projectDir}/bin/python/merge_transition_audits.py \
         --input-dir batches \
         --prefix simulation_transition_evidence
+    """
+
+    stub:
+    """
+    touch simulation_transition_evidence.transitions.tsv simulation_transition_evidence.mechanisms.tsv
     """
 }

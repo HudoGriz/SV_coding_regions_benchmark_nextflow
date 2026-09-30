@@ -13,7 +13,7 @@ process EXCLUDE_HOMREF_CALLS {
     tuple val(meta), path(vcf), path(tbi)
 
     output:
-    tuple val(meta), path("${prefix}.benchmarked.vcf.gz"), path("${prefix}.benchmarked.vcf.gz.tbi"), env(removed), emit: vcf
+    tuple val(meta), path("${prefix}.benchmarked.vcf.gz"), path("${prefix}.benchmarked.vcf.gz.tbi"), env("removed"), emit: vcf
     path "${prefix}.homref_excluded.tsv", emit: counts
 
     script:

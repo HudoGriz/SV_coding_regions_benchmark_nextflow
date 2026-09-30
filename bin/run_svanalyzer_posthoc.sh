@@ -73,6 +73,13 @@ declare -A raw_vcf=(
     [PacBio:CuteSV]="PacBio/CuteSV/*.vcf.gz"
     [PacBio:Pbsv]="PacBio/PBSV/*.vcf.gz"
 )
+# Runs with the 0/0 filter keep the VCF each benchmark actually scored in
+# benchmarked_calls/<technology>/<caller>/; use it when it is there.
+if [[ -d "$results/benchmarked_calls" ]]; then
+    for spec in "${!raw_vcf[@]}"; do
+        raw_vcf[$spec]="../benchmarked_calls/${spec%%:*}/${spec##*:}/*.benchmarked.vcf.gz"
+    done
+fi
 pipelines=("$@")
 if [[ ${#pipelines[@]} -eq 0 ]]; then
     for spec in "${!raw_vcf[@]}"; do

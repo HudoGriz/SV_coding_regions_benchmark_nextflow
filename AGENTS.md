@@ -229,6 +229,10 @@ Override behavior in `conf/modules.config` via `withName:` blocks.
 - GRCh38 BAMs: `preparation/build_grch38_analysis_bams.sh` restricts to the
   analysis contigs, then removes SA entries naming the dropped contigs; no flag
   or MAPQ filters. The pipeline reads the `*.sa_filtered.bam` outputs.
+- Nextflow hashes any `bin/` entry whose name appears as a word in a task script. The Manta module runs
+  `python manta/runWorkflow.py`, which matches the `bin/python/` directory, so adding or removing a file
+  there invalidates Manta's cache (and every Manta benchmark) on the next `-resume`. Do not add or remove
+  files in `bin/python/` while a run that may be resumed is in flight.
 - Compute nodes have no git. The drivers record a hash of the pipeline files
   instead; match it to a commit on the login node.
 
@@ -236,5 +240,6 @@ Override behavior in `conf/modules.config` via `withName:` blocks.
 
 Defined in `nextflow.config` with defaults, documented in `nextflow_schema.json`.
 Boolean flags: `skip_benchmarking`, `skip_pbsv`, `skip_delly`, `simulate_targets`, `gather_statistics`,
-`generate_transition_evidence`, `sensitivity_benchmarks`.
+`generate_transition_evidence`, `sensitivity_benchmarks`, `exclude_homref_calls` (default true: calls
+genotyped 0/0 are dropped before benchmarking; `./.` calls are kept).
 Use `null` as default for optional file paths.

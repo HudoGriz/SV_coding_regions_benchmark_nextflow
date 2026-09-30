@@ -46,6 +46,9 @@ RAW_VCF = {
     ("PacBio", "CuteSV"): "PacBio/CuteSV/*.vcf.gz",
     ("PacBio", "Pbsv"): "PacBio/PBSV/*.vcf.gz",
 }
+# The VCF each benchmark actually scored: the caller's VCF with calls genotyped
+# 0/0 removed (EXCLUDE_HOMREF_CALLS). Runs before that step have only sv_calls/.
+BENCHMARKED_VCF = "benchmarked_calls/{technology}/{caller}/*.benchmarked.vcf.gz"
 
 
 def single(paths: list[Path], what: str) -> Path:
@@ -137,7 +140,9 @@ def main():
     checks = []
     truth_done = False
     for (technology, caller), pattern in RAW_VCF.items():
-        matches = sorted((args.results / "sv_calls").glob(pattern))
+        matches = sorted(args.results.glob(BENCHMARKED_VCF.format(technology=technology, caller=caller)))
+        if not matches:
+            matches = sorted((args.results / "sv_calls").glob(pattern))
         if not matches:
             continue
         raw_vcf = single(matches, f"{technology} {caller} VCF")

@@ -159,7 +159,9 @@ Truvari's size defaults: truth records must be at least `--sizemin` 50 bp, candi
 record but is dropped, not counted as a false positive, when it does not. `--refdist` is satisfied
 when the candidate's span lies within that distance of the truth span; `--pctseq` is applied only
 when both records are sequence-resolved. Inversions are not converted and are scored as their own
-type. Every benchmark directory keeps its full configuration in `<prefix>/params.json`. The pipeline uses a [modified Truvari](https://github.com/CISLD/truvari) that allows partial overlap with target intervals. The value of `--bench-overlaps` is the minimum number of positions a call must share with a target interval; `1` is the one-base intersection the published results use, and `0` restores stock containment.
+type. Every benchmark directory keeps its full configuration in `<prefix>/params.json`.
+
+Before any benchmark, calls genotyped homozygous reference (`0/0`, `0|0`, haploid `0`) are removed (`exclude_homref_calls`, default `true`): the caller is stating that the sample does not carry them, and the truth sets count only records that carry an ALT allele. Calls without a genotype (`./.`, all cuteSV calls) are kept, which is why Truvari's own `--no-ref` is not used. A caller with no such call is benchmarked on its original VCF. The scored VCFs and the per-caller counts are in `benchmarked_calls/`. Set `--exclude_homref_calls false` to reproduce the analysis published before revision round 1. The pipeline uses a [modified Truvari](https://github.com/CISLD/truvari) that allows partial overlap with target intervals. The value of `--bench-overlaps` is the minimum number of positions a call must share with a target interval; `1` is the one-base intersection the published results use, and `0` restores stock containment.
 
 ### Resource Limits
 
@@ -173,6 +175,7 @@ type. Every benchmark directory keeps its full configuration in `<prefix>/params
 
 ```
 {outdir}/
+├── benchmarked_calls/               # VCFs as scored (0/0 calls removed) and the removal counts
 ├── sv_calls/                        # SV caller output VCFs
 │   ├── Illumina_WES/Manta/
 │   ├── Illumina_WGS/Manta/

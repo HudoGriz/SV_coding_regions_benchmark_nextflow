@@ -25,6 +25,7 @@ include { SIMULATE_AND_BENCHMARK } from './workflows/simulate_and_benchmark'
 include { ANALYSIS_AND_PLOTS } from './workflows/analysis_and_plots'
 include { TARGET_TRANSITION_EVIDENCE } from './workflows/target_transition_evidence'
 include { SENSITIVITY_BENCHMARKS } from './workflows/sensitivity_benchmarks'
+include { EXCLUDE_HOMREF_CALLS } from './modules/local/exclude_homref_calls'
 
 /*
 ========================================================================================
@@ -66,6 +67,7 @@ workflow {
           --tandem_repeats       Tandem repeats BED file (for Sniffles)
           --skip_delly           Skip Delly on Illumina WGS (default: false)
           --delly_exclude        Delly exclude template (telomeres, centromeres)
+          --exclude_homref_calls Drop calls genotyped 0/0 before benchmarking (default: true)
           
         Simulation Options:
           --simulate_targets     Enable target region simulation (default: false)
@@ -157,6 +159,23 @@ workflow {
         ch_fasta_fai,
         ch_tandem_repeats
     )
+
+    //
+    // Calls genotyped homozygous reference (0/0) are the caller stating that the
+    // sample does not carry the variant, and the truth sets count only records
+    // that carry an ALT allele, so these calls are dropped before any benchmark.
+    // A caller with none keeps its original VCF, so its benchmarks are unchanged
+    // and a resumed run reuses them.
+    //
+    ch_calls = SV_CALLING.out.vcfs
+    if (params.exclude_homref_calls) {
+        EXCLUDE_HOMREF_CALLS(SV_CALLING.out.vcfs)
+        ch_calls = SV_CALLING.out.vcfs
+            .join(EXCLUDE_HOMREF_CALLS.out.vcf)
+            .map { meta, vcf, tbi, filtered_vcf, filtered_tbi, removed ->
+                removed.toInteger() > 0 ? [meta, filtered_vcf, filtered_tbi] : [meta, vcf, tbi]
+            }
+    }
     
     //
     // SUBWORKFLOW: Benchmarking
@@ -164,7 +183,7 @@ workflow {
     ch_truvari_results = Channel.empty()
     if (params.benchmark_vcf && !params.skip_benchmarking) {
         BENCHMARKING(
-            SV_CALLING.out.vcfs,
+            ch_calls,
             ch_benchmark_vcf,
             ch_benchmark_vcf_tbi,
             ch_targets,
@@ -181,7 +200,7 @@ workflow {
     //
     if (params.sensitivity_benchmarks && params.benchmark_vcf && !params.skip_benchmarking) {
         SENSITIVITY_BENCHMARKS(
-            SV_CALLING.out.vcfs,
+            ch_calls,
             ch_targets,
             ch_benchmark_vcf,
             ch_benchmark_vcf_tbi,
@@ -223,7 +242,7 @@ workflow {
             ch_fasta_fai,
             ch_benchmark_vcf,
             ch_benchmark_vcf_tbi,
-            SV_CALLING.out.vcfs,
+            ch_calls,
             params.num_simulations,
             ch_wes_utr,
             ch_high_confidence

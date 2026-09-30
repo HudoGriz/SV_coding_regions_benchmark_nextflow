@@ -26,6 +26,7 @@ include { ANALYSIS_AND_PLOTS } from './workflows/analysis_and_plots'
 include { TARGET_TRANSITION_EVIDENCE } from './workflows/target_transition_evidence'
 include { SENSITIVITY_BENCHMARKS } from './workflows/sensitivity_benchmarks'
 include { EXCLUDE_HOMREF_CALLS } from './modules/local/exclude_homref_calls'
+include { POSTHOC_ANALYSES } from './workflows/posthoc_analyses'
 
 /*
 ========================================================================================
@@ -77,8 +78,12 @@ workflow {
           --gather_statistics    Generate statistics and plots (default: false)
           --generate_transition_evidence  Audit target-boundary transitions and create figures
           --sensitivity_benchmarks        Re-score the real targets under alternative settings
-        
+          --posthoc_analyses     Decomposition, post-matching stratification, bootstrap,
+                                 sensitivity audits and simulation fidelity (default: false)
+
         Profiles:
+          study                  Every analysis of the study: 500 simulated sets, statistics,
+                                 transition evidence, sensitivity benchmarks, post-hoc analyses
           test_nfcore            Run with nf-core test data
           test                   Run with minimal test data
           docker                 Use Docker containers
@@ -199,6 +204,7 @@ workflow {
     //
     // SUBWORKFLOW: Sensitivity benchmarks on the real targets (optional)
     //
+    ch_sensitivity_bench = Channel.empty()
     if (params.sensitivity_benchmarks && params.benchmark_vcf && !params.skip_benchmarking) {
         SENSITIVITY_BENCHMARKS(
             ch_calls,
@@ -208,6 +214,7 @@ workflow {
             ch_fasta,
             ch_fasta_fai
         )
+        ch_sensitivity_bench = SENSITIVITY_BENCHMARKS.out.bench_files
     }
 
     //
@@ -285,6 +292,31 @@ workflow {
         log.info "Target-transition evidence tables and figures generated"
     }
     
+    //
+    // SUBWORKFLOW: Post-hoc analyses (optional). They compare the real targets with
+    // the simulated interval sets, so they need a truth set and the simulations.
+    //
+    if (params.posthoc_analyses) {
+        if (!params.benchmark_vcf || params.skip_benchmarking || !params.simulate_targets) {
+            error "--posthoc_analyses needs --benchmark_vcf, benchmarking enabled and --simulate_targets true"
+        }
+        if (params.sensitivity_benchmarks && !params.generate_transition_evidence) {
+            error "--posthoc_analyses with --sensitivity_benchmarks needs --generate_transition_evidence true"
+        }
+        POSTHOC_ANALYSES(
+            BENCHMARKING.out.bench_files
+                .mix(SIMULATE_AND_BENCHMARK.out.bench_files)
+                .mix(ch_sensitivity_bench),
+            ch_calls,
+            SIMULATE_AND_BENCHMARK.out.simulated_beds,
+            ch_targets,
+            ch_benchmark_vcf.combine(ch_benchmark_vcf_tbi),
+            ch_fasta.combine(ch_fasta_fai),
+            params.generate_transition_evidence ? TARGET_TRANSITION_EVIDENCE.out.evidence : Channel.empty(),
+            params.reference_assembly
+        )
+    }
+
     /*
     ========================================================================================
         WORKFLOW COMPLETION HANDLER

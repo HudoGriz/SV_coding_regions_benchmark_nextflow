@@ -161,7 +161,7 @@ when the candidate's span lies within that distance of the truth span; `--pctseq
 when both records are sequence-resolved. Inversions are not converted and are scored as their own
 type. Every benchmark directory keeps its full configuration in `<prefix>/params.json`.
 
-Before any benchmark, calls genotyped homozygous reference (`0/0`, `0|0`, haploid `0`) are removed (`exclude_homref_calls`, default `true`): the caller is stating that the sample does not carry them, and the truth sets count only records that carry an ALT allele. Calls without a genotype (`./.`, all cuteSV calls) are kept, which is why Truvari's own `--no-ref` is not used. A caller with no such call is benchmarked on its original VCF. The scored VCFs and the per-caller counts are in `benchmarked_calls/`. Set `--exclude_homref_calls false` to reproduce the analysis published before revision round 1. The pipeline uses a [modified Truvari](https://github.com/CISLD/truvari) that allows partial overlap with target intervals. The value of `--bench-overlaps` is the minimum number of positions a call must share with a target interval; `1` is the one-base intersection the published results use, and `0` restores stock containment.
+Before any benchmark, calls genotyped homozygous reference (`0/0`, `0|0`, haploid `0`) are removed (`exclude_homref_calls`, default `true`): the caller is stating that the sample does not carry them, and the truth sets count only records that carry an ALT allele. Calls without a genotype (`./.`, all cuteSV calls) are kept, which is why Truvari's own `--no-ref` is not used. A caller with no such call is benchmarked on its original VCF. The scored VCFs and the per-caller counts are in `benchmarked_calls/`. `--exclude_homref_calls false` scores them like any other call. The pipeline uses a [modified Truvari](https://github.com/CISLD/truvari) that allows partial overlap with target intervals. The value of `--bench-overlaps` is the minimum number of positions a call must share with a target interval; `1` is the one-base intersection the published results use, and `0` restores stock containment.
 
 ### Resource Limits
 
@@ -261,92 +261,90 @@ process containers; the workflow is not launched from inside a container.
 > `charliecloud` profiles can run SV calling, whose images all come from
 > `quay.io`, but not the Truvari or analysis stages.
 
-### Running the drivers elsewhere
+### Running the study
 
-The scripts in `bin/` contain no absolute paths. Everything site-specific is an
-environment variable, so they run unmodified on any machine:
+One command runs every analysis of the study for one assembly: SV calling
+(including Delly), benchmarking on HCI, GP and EX+UTR, the 500 simulated interval
+sets, statistics and plots, target-transition evidence, the sensitivity
+benchmarks and the post-hoc analyses. The `study` profile sets those options;
+each one remains an ordinary parameter that can be switched off.
+
+```bash
+bash preparation/generate_params.sh --genome GRCh38 --datadir /path/to/GRCh38/data \
+    --outfile params_GRCh38.yaml
+nextflow run . -params-file params_GRCh38.yaml -profile singularity,study \
+    --reference_assembly GRCh38 --outdir results-GRCh38
+```
+
+The post-hoc analyses (`--posthoc_analyses`, on in `study`) run as pipeline
+tasks after the benchmarks and publish under `<outdir>/posthoc/`:
+
+- every benchmark's metrics and Truvari parameters in one table, optionally
+  compared row by row with another run (`--posthoc_compare_results <dir>`);
+- SV-type accounting from the scored VCF to the HCI benchmark;
+- the recall and precision decomposition (composition versus label transitions)
+  with the candidate-side audit of false positives, per pipeline;
+- post-matching stratification, checked against the composition-only values;
+- block-bootstrap intervals and rarefied percentile ranks;
+- transition audits across the threshold grid and recovery under `--extend` and
+  padding;
+- composition standardisation of the simulated metrics;
+- simulation fidelity (GIAB v3.3 stratifications by default;
+  `--posthoc_segdups` and `--posthoc_lowmappability` override them).
+
+They need a truth set and `--simulate_targets true`; with the sensitivity
+benchmarks they also need `--generate_transition_evidence true`.
+
+The SVanalyzer second-comparator check is deliberately not part of the pipeline.
+Run it on a finished run with `bin/run_svanalyzer_posthoc.sh <run_root> <assembly>`
+(`SVANALYZER_SIF` built from `containers/Singularity.svanalyzer`).
+
+GRCh38 BAMs are prepared with `preparation/build_grch38_analysis_bams.sh`, which
+restricts them to the contigs of the analysis reference and filters nothing
+else: discordant pairs, supplementary alignments and reads with an unmapped mate
+all stay. A second stage (`strip_absent_sa_entries.py`) removes the SA-tag
+entries that still point at a dropped contig, which pbsv otherwise aborts on; it
+keeps every record. A BAM whose header already matches the reference (ONT) is
+used as distributed. The `*.analysis_contigs.sa_filtered.bam` files in
+`data/analysis_bams/` are the pipeline inputs.
+
+### Run driver
+
+`bin/run_benchmark.sh <label> <assembly> [nextflow arguments ...]` wraps the
+command above for dated, provenance-recorded runs. Each assembly runs from its
+own directory under `$SV_DATA_ROOT/<label>/`; the driver refuses to write into
+existing results unless `SV_RESUME=1`, and records the params file, the
+execution config, the image checksums and a hash of the pipeline files, so a
+run can be matched to a commit even where the execution host has no git. Extra
+arguments go to Nextflow unchanged.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `SV_DATA_ROOT` | *required* | Directory holding the prepared per-assembly data |
-| `SV_PROFILE` | `singularity` | Nextflow profile to run with |
+| `SV_PARAMS_FILE` | `$SV_DATA_ROOT/<assembly>/params_<assembly>.yaml` | Params file |
+| `SV_PROFILE` | `singularity,study` | Nextflow profile(s) |
 | `SV_HPC_CONFIG` | unset | Extra Nextflow config for the execution environment (executor, queue, container cache) |
 | `SV_ENV_MODULE` | unset | Environment module to load before running |
 | `SV_CONDA_ENV` | unset | Conda environment to activate before running |
 | `TRUVARI_SIF` | published image | Local `.sif` or registry URI overriding the Truvari container |
 | `ANALYSIS_SIF` | published image | Local `.sif` overriding the analysis container |
-| `SV_IMAGE_CACHE` | inside the output directory | Where pulled images are cached |
+| `SV_RESUME` | unset | `1` resumes the run instead of refusing |
 
 Leaving `TRUVARI_SIF` and `ANALYSIS_SIF` unset is the reproducible choice: the
 pipeline then uses the published, immutable tags in `nextflow.config`. Setting
 either one is recorded in the run manifest along with its checksum.
 
-To reproduce the published runs, point the driver at your prepared data and at a
-Nextflow config for your execution environment:
-
-```bash
-export SV_DATA_ROOT=/path/to/prepared/data
-export SV_HPC_CONFIG=/path/to/your/site.config   # optional: executor, queue, container cache
-bin/run_clean_dated_benchmark.sh 2026-08-03
-```
-
-The drivers assume no scheduler. To run one as a batch job, submit it with your
-scheduler's own command; launchers specific to one site belong in the git-ignored
-`local/` directory, not in the repository.
-
-### Revision runs (review round 1)
-
-The review revision reran both assemblies with Delly added, the GRCh38 BAMs
-rebuilt and the sensitivity benchmarks enabled, into a new run directory that
-leaves every earlier run untouched.
-
-- `preparation/build_grch38_analysis_bams.sh` restricts the GRCh38 BAMs to the
-  contigs of the analysis reference and filters nothing else: discordant pairs,
-  supplementary alignments and reads with an unmapped mate all stay. A second
-  stage (`strip_absent_sa_entries.py`) removes the SA-tag entries that still
-  point at a dropped contig, which pbsv otherwise aborts on; it keeps every
-  record. A BAM whose header already matches the reference (ONT) is used as
-  distributed. Outputs and per-BAM manifests go to `data/analysis_bams/`; the
-  `*.analysis_contigs.sa_filtered.bam` files are the pipeline inputs. The earlier
-  `filtered_bams/` (`-F 3852 -f 2` for Illumina, `-F 2308 -q 1` for long reads)
-  are no longer used.
-- `bin/run_revision_benchmark.sh <label> <assembly>` runs the pipeline with the
-  revision settings (500 simulated interval sets, transition evidence, sensitivity
-  benchmarks) for one assembly, from its own directory under
-  `$SV_DATA_ROOT/<label>/`. It refuses to write into existing results unless
-  `SV_RESUME=1`, and records the params file, the execution config, the image
-  checksums and a hash of the pipeline files, so a run can be matched to a commit
-  even where the execution host has no git. Write the params file first with
-  `preparation/generate_params.sh`.
-- `bin/run_revision_posthoc.sh <run_root> <assembly>` runs every post-hoc
-  analysis of a finished run into `<run_root>/posthoc/<assembly>/`:
-  - the metrics and Truvari parameter tables;
-  - a comparison with an earlier run (`SV_COMPARE_RESULTS`);
-  - SV-type record accounting;
-  - the recall/precision decomposition with the candidate-side audit;
-  - post-matching stratification;
-  - the bootstrap and rarefied null;
-  - the sensitivity audits;
-  - composition standardisation;
-  - simulation fidelity.
-
-  The scripts are in `bin/python/` and run inside the pinned images. Parallel
-  jobs default to the number of online CPUs (`SV_POSTHOC_JOBS` overrides).
-- `bin/run_svanalyzer_posthoc.sh <run_root> <assembly>` runs the SVanalyzer
-  second-comparator check outside the pipeline (`SVANALYZER_SIF`, built from
-  `containers/Singularity.svanalyzer`).
-
 ```bash
 export SV_DATA_ROOT=/path/to/prepared/data
 export SV_HPC_CONFIG=/path/to/your/site.config   # optional
 for asm in GRCh37 GRCh38; do
-    bash preparation/generate_params.sh --genome "$asm" --datadir "$SV_DATA_ROOT/$asm/data" \
-        --outfile "$SV_DATA_ROOT/$asm/params_$asm.revision1.yaml"
-    SV_PARAMS_FILE="$SV_DATA_ROOT/$asm/params_$asm.revision1.yaml" \
-        bin/run_revision_benchmark.sh revision1 "$asm"
-    bin/run_revision_posthoc.sh "$SV_DATA_ROOT/revision1" "$asm"
+    bin/run_benchmark.sh "$(date +%F)" "$asm"
 done
 ```
+
+The driver assumes no scheduler. To run it as a batch job, submit it with your
+scheduler's own command; launchers specific to one site belong in the
+git-ignored `local/` directory, not in the repository.
 
 ## Repository Structure
 

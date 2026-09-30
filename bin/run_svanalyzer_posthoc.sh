@@ -4,7 +4,7 @@
 #
 #   bin/run_svanalyzer_posthoc.sh <run_root> <assembly> [TECH:CALLER ...]
 #
-# For each WGS pipeline of a finished revision run, the truth and candidate
+# For each WGS pipeline of a finished run, the truth and candidate
 # VCFs are pre-filtered independently to HCI and to the boundary target with
 # Truvari's own membership and filters (prefilter_vcf.py), benchmarked with
 # `svanalyzer benchmark`, and every HCI-TP to target-FN truth variant is traced
@@ -13,7 +13,9 @@
 #
 # Environment:
 #   SVANALYZER_SIF   image built from containers/Singularity.svanalyzer (required)
-#   TRUVARI_SIF, ANALYSIS_SIF, SV_IMAGE_CACHE, SV_POSTHOC_JOBS   as for run_revision_posthoc.sh
+#   TRUVARI_SIF, ANALYSIS_SIF   local images instead of the published URIs
+#   SV_IMAGE_CACHE               where published images are pulled to
+#   SV_POSTHOC_JOBS              parallel pipelines (default: all online CPUs)
 #   SVA_MAXDIST (500), SVA_NORMSHIFT (1.0), SVA_NORMSIZEDIFF (0.3), SVA_NORMDIST (1.0)
 #     maxdist mirrors Truvari's refdist, normsizediff 0.3 its pctsize 0.7, and
 #     normdist 1.0 its pctseq 0 (no sequence requirement); normshift keeps the

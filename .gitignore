@@ -64,4 +64,4 @@ Thumbs.db
 containers/*.sif
 
 # Site- and machine-specific launchers (Slurm submission, cluster config wrappers); never committed
-local/
+/local/

@@ -209,7 +209,7 @@ Override behavior in `conf/modules.config` via `withName:` blocks.
   `container = { params.analysis_container }` closures resolve without undefined-parameter warnings.
 - Per-process container overrides in `conf/modules.config`.
 
-## Revision runs (review round 1)
+## Analyses beyond the primary benchmark
 
 - Delly 1.7.3 (nf-core `delly/call`, biocontainer) runs on Illumina WGS next to
   Manta, with Delly's exclude template (`delly_exclude`). WES stays Manta-only.
@@ -221,10 +221,16 @@ Override behavior in `conf/modules.config` via `withName:` blocks.
 - The transition-evidence and padding processes run `python3 ${projectDir}/bin/python/*.py`
   inside the analysis image, like the R scripts. Scripts can change without a
   new image, and a run's code is the commit, not whatever was baked into the image.
-- Drivers: `bin/run_revision_benchmark.sh` (full run of one assembly; refuses to
-  overwrite; `SV_RESUME=1` to resume; no scheduler assumed),
-  `bin/run_revision_posthoc.sh` (post-hoc tables), and
-  `bin/run_svanalyzer_posthoc.sh` (second-comparator check, never in the pipeline).
+- `POSTHOC_ANALYSES` (`--posthoc_analyses`) runs the post-hoc scripts in
+  `bin/python/` as pipeline tasks. The scripts read the published results layout,
+  so each task rebuilds the part it needs from staged files and a manifest
+  (`modules/local/posthoc_analyses.nf`); `bench_dir()` in
+  `workflows/posthoc_analyses.nf` must mirror the `TRUVARI_BENCH` publishDir in
+  `conf/modules.config`.
+- The `study` profile (`conf/study.config`) turns on every analysis of the study.
+- Driver: `bin/run_benchmark.sh <label> <assembly> [nextflow args]` (refuses to
+  overwrite; `SV_RESUME=1` to resume; no scheduler assumed). The SVanalyzer check
+  `bin/run_svanalyzer_posthoc.sh` stays outside the pipeline by design.
 - GRCh38 BAMs: `preparation/build_grch38_analysis_bams.sh` restricts to the
   analysis contigs, then removes SA entries naming the dropped contigs; no flag
   or MAPQ filters. The pipeline reads the `*.sa_filtered.bam` outputs.

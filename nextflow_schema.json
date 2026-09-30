@@ -120,7 +120,7 @@
                     "type": "boolean",
                     "default": true,
                     "description": "Drop calls genotyped homozygous reference (0/0) before benchmarking",
-                    "help_text": "A 0/0 genotype is the caller stating that the sample does not carry the variant. Calls without a genotype (./.) are kept. Set to false to reproduce the analysis published before revision round 1."
+                    "help_text": "A 0/0 genotype is the caller stating that the sample does not carry the variant. Calls without a genotype (./.) are kept. Set to false to score them like any other call."
                 },
                 "delly_exclude": {
                     "type": "string",
@@ -235,6 +235,25 @@
                     "type": "string",
                     "default": "0,20,50,100,200,300,500",
                     "description": "Symmetric paddings of transition_target, clipped to the broad target"
+                },
+                "posthoc_analyses": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Run the post-hoc analyses: decomposition, post-matching stratification, bootstrap, sensitivity audits, composition standardisation and simulation fidelity",
+                    "help_text": "Needs a truth set and --simulate_targets true; with --sensitivity_benchmarks it also needs --generate_transition_evidence true. Outputs go to <outdir>/posthoc/."
+                },
+                "posthoc_compare_results": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "description": "Results directory of another run; every metric is compared with it row by row"
+                },
+                "posthoc_segdups": {
+                    "type": "string",
+                    "description": "Segmental-duplication BED for the simulation-fidelity table (default: GIAB v3.3 for --reference_assembly)"
+                },
+                "posthoc_lowmappability": {
+                    "type": "string",
+                    "description": "Low-mappability BED for the simulation-fidelity table (default: GIAB v3.3 for --reference_assembly)"
                 },
                 "reference_assembly": {
                     "type": "string",

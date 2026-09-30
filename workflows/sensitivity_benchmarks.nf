@@ -19,8 +19,8 @@
 
     Only the primary breakend mode is scored, and WES is left out as it is from the
     empirical null. Results publish under <outdir>/sensitivity/<setting>/ and feed
-    no headline table. The audits that compare settings are run afterwards from the
-    published files (bin/run_revision_posthoc.sh).
+    no headline table. The audits that compare settings are part of the post-hoc
+    analyses (--posthoc_analyses).
 ----------------------------------------------------------------------------------------
 */
 
@@ -121,5 +121,12 @@ workflow SENSITIVITY_BENCHMARKS {
 
     emit:
     summary     = TRUVARI_BENCH.out.summary  // channel: [meta, summary.json]
+    // channel: [meta, summary, params.json, tp-base, tbi, tp-comp, tbi, fn, tbi, fp, tbi], for the post-hoc analyses
+    bench_files = TRUVARI_BENCH.out.summary
+        .join(TRUVARI_BENCH.out.params)
+        .join(TRUVARI_BENCH.out.tp_base_vcf).join(TRUVARI_BENCH.out.tp_base_tbi)
+        .join(TRUVARI_BENCH.out.tp_comp_vcf).join(TRUVARI_BENCH.out.tp_comp_tbi)
+        .join(TRUVARI_BENCH.out.fn_vcf).join(TRUVARI_BENCH.out.fn_tbi)
+        .join(TRUVARI_BENCH.out.fp_vcf).join(TRUVARI_BENCH.out.fp_tbi)
     padded_beds = PAD_TARGET_BED.out.bed     // channel: [target_name, padding, bed]
 }

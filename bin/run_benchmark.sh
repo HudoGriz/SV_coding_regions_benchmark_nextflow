@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Run the full pipeline for one assembly into a new run directory:
+# Run the pipeline for one assembly into a new run directory:
 #
-#   bin/run_revision_benchmark.sh <run_label> <assembly>
+#   bin/run_benchmark.sh <run_label> <assembly> [extra nextflow arguments ...]
 #
+# Which analyses run is set by the Nextflow profile and parameters, not here:
+# the default profile `singularity,study` runs every analysis of the study, and
+# any extra argument (for example --posthoc_analyses false) is passed through.
 # Results go to $SV_DATA_ROOT/<run_label>/results-<assembly>. Each assembly is
 # launched from its own directory there, so the two assemblies can run at the
 # same time and each keeps its own Nextflow cache for -resume.
@@ -19,7 +22,7 @@
 #   SV_DATA_ROOT     directory holding the prepared per-assembly data
 #   SV_PARAMS_FILE   params file (default $SV_DATA_ROOT/<assembly>/params_<assembly>.yaml)
 #   SV_HPC_CONFIG    extra Nextflow config for the execution environment
-#   SV_PROFILE       Nextflow profile (default singularity)
+#   SV_PROFILE       Nextflow profile(s) (default singularity,study)
 #   SV_ENV_MODULE    environment module that provides conda or nextflow
 #   SV_CONDA_ENV     conda environment with nextflow
 #   SV_MAX_TIME      ceiling on any task's time request (default 120.h)
@@ -27,8 +30,10 @@
 #   ANALYSIS_SIF, TRUVARI_SIF   local images overriding the published defaults
 set -euo pipefail
 
-run_label=${1:?usage: run_revision_benchmark.sh <run_label> <assembly>}
-assembly=${2:?usage: run_revision_benchmark.sh <run_label> <assembly>}
+run_label=${1:?usage: run_benchmark.sh <run_label> <assembly> [nextflow arguments ...]}
+assembly=${2:?usage: run_benchmark.sh <run_label> <assembly> [nextflow arguments ...]}
+shift 2
+extra_args=("$@")
 [[ "$assembly" == GRCh37 || "$assembly" == GRCh38 ]] || {
     echo "ERROR: assembly must be GRCh37 or GRCh38, got $assembly" >&2; exit 1; }
 
@@ -82,6 +87,8 @@ pipeline_files="$run_root/logs/pipeline_files.$assembly.$stamp.sha256"
     echo "assembly=$assembly"
     echo "started_at=$(date --iso-8601=seconds)"
     echo "resume=$resume"
+    echo "profile=${SV_PROFILE:-singularity,study}"
+    echo "extra_args=${extra_args[*]}"
     echo "host=$(hostname)"
     echo "pipeline=$repo_root"
     echo "pipeline_tree_sha256=$(sha256sum < "$pipeline_files" | cut -d' ' -f1)  ($(wc -l < "$pipeline_files") files, listed in $pipeline_files)"
@@ -127,7 +134,7 @@ command -v nextflow >/dev/null 2>&1 || {
 }
 export NXF_OPTS=${NXF_OPTS:--Xms1g -Xmx6g}
 
-nf_args=(-params-file "$params_file" -profile "${SV_PROFILE:-singularity}")
+nf_args=(-params-file "$params_file" -profile "${SV_PROFILE:-singularity,study}")
 [[ -n "$hpc_config" ]] && nf_args+=(-c "$hpc_config")
 [[ -n "$analysis_sif" ]] && nf_args+=(--analysis_container "$analysis_sif")
 [[ -n "$truvari_sif" ]] && nf_args+=(--truvari_container "$truvari_sif")
@@ -151,11 +158,7 @@ nextflow -log "$run_root/logs/nextflow.$assembly.$stamp.log" run "$repo_root" \
     --run_name "${assembly}_${run_label}" \
     --reference_assembly "$assembly" \
     --max_time "${SV_MAX_TIME:-120.h}" \
-    --num_simulations 500 \
-    --simulate_targets true \
-    --gather_statistics true \
-    --generate_transition_evidence true \
-    --sensitivity_benchmarks true \
+    "${extra_args[@]}" \
     -ansi-log false >> "$run_root/logs/run_$assembly.$stamp.out" 2>&1 || status=$?
 
 if [[ "$status" == 0 ]]; then

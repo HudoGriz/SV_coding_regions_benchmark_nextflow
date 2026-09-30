@@ -79,7 +79,6 @@ def main():
     parser.add_argument("--pipeline", required=True)
     parser.add_argument("--hci-prefix", required=True, type=Path, help="svanalyzer --prefix of the HCI run")
     parser.add_argument("--target-prefix", required=True, type=Path)
-    parser.add_argument("--hci-truth", required=True, type=Path)
     parser.add_argument("--target-truth", required=True, type=Path)
     parser.add_argument("--target-test", required=True, type=Path)
     parser.add_argument("--normshift", type=float, required=True)

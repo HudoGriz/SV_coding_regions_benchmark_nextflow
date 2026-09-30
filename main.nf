@@ -165,10 +165,11 @@ workflow {
     // sample does not carry the variant, and the truth sets count only records
     // that carry an ALT allele, so these calls are dropped before any benchmark.
     // A caller with none keeps its original VCF, so its benchmarks are unchanged
-    // and a resumed run reuses them.
+    // and a resumed run reuses them. Only the benchmarking subworkflows read these
+    // calls, and all of them need a truth set, so without one the step is skipped.
     //
     ch_calls = SV_CALLING.out.vcfs
-    if (params.exclude_homref_calls) {
+    if (params.exclude_homref_calls && params.benchmark_vcf) {
         EXCLUDE_HOMREF_CALLS(SV_CALLING.out.vcfs)
         ch_calls = SV_CALLING.out.vcfs
             .join(EXCLUDE_HOMREF_CALLS.out.vcf)

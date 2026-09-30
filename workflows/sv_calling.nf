@@ -173,7 +173,7 @@ workflow SV_CALLING {
         if (!params.skip_delly) {
             def delly_exclude = params.delly_exclude ? file(params.delly_exclude, checkIfExists: true) : []
             DELLY_CALL(
-                ch_illumina_wgs_bam.map { meta, bam, bai, target_bed, target_tbi ->
+                ch_illumina_wgs_bam.map { meta, bam, bai, _target_bed, _target_tbi ->
                     [[id: meta.id, technology: meta.technology, tool: 'Delly'], bam, bai, [], [], delly_exclude]
                 },
                 ch_fasta.map { f -> [[id: 'fasta'], f] },

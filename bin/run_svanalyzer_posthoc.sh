@@ -133,7 +133,7 @@ run_pipeline() {
     "$engine" exec -B "$repo_root" -B "$run_root" "$analysis_sif" python3 "$repo_root/bin/python/svanalyzer_eligibility.py" \
         --assembly "$assembly" --pipeline "${spec/:/ }" \
         --hci-prefix "$out/runs/$name.hci/benchmark" --target-prefix "$out/runs/$name.target/benchmark" \
-        --hci-truth "$out/inputs/truth.hci.vcf.gz" --target-truth "$out/inputs/truth.target.vcf.gz" \
+        --target-truth "$out/inputs/truth.target.vcf.gz" \
         --target-test "$out/inputs/$name.target.vcf.gz" \
         --normshift "$normshift" --normsizediff "$normsizediff" --normdist "$normdist" \
         --summary "$out/runs/$name.summary.tsv" --records "$out/runs/$name.transitions.tsv"

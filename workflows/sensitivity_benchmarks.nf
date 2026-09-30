@@ -30,7 +30,7 @@ include { PAD_TARGET_BED } from '../modules/local/pad_target_bed'
 // A comma-separated parameter as a list of trimmed, non-empty strings. A value
 // given on the command line may arrive as a number, hence toString().
 def split_values(value) {
-    value == null ? [] : value.toString().split(',').collect { it.trim() }.findAll { it }
+    value == null ? [] : value.toString().split(',').collect { v -> v.trim() }.findAll { v -> v }
 }
 
 workflow SENSITIVITY_BENCHMARKS {
@@ -76,12 +76,12 @@ workflow SENSITIVITY_BENCHMARKS {
 
     // [target_name, setting, bed] for the padded boundary target
     ch_allowed = ch_targets
-        .filter { target_name, bed -> target_name == params.transition_hci_target }
-        .map { target_name, bed -> bed }
+        .filter { target_name, _bed -> target_name == params.transition_hci_target }
+        .map { _target_name, bed -> bed }
 
     PAD_TARGET_BED(
         ch_targets
-            .filter { target_name, bed -> target_name == boundary_target }
+            .filter { target_name, _bed -> target_name == boundary_target }
             .combine(Channel.fromList(split_values(params.sensitivity_padding)))
             .combine(ch_allowed)
     )
@@ -91,7 +91,7 @@ workflow SENSITIVITY_BENCHMARKS {
     }
 
     ch_bench_input = ch_vcfs
-        .filter { meta, vcf, tbi -> meta.technology != 'Illumina_WES' }
+        .filter { meta, _vcf, _tbi -> meta.technology != 'Illumina_WES' }
         .combine(ch_setting_beds.mix(ch_padded_beds))
         .combine(ch_benchmark_vcf)
         .combine(ch_benchmark_vcf_tbi)

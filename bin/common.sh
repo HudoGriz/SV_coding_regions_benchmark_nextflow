@@ -2,10 +2,9 @@
 # Shared helpers for the driver scripts. Source it, do not execute it.
 #
 # Locating this file is the caller's job and is not as simple as it looks:
-# under sbatch the script runs from a copy in the scheduler's spool directory,
-# so BASH_SOURCE does not point into the repository. Each driver therefore
-# tries SV_REPO_ROOT, then its own location, then SLURM_SUBMIT_DIR, then $PWD,
-# accepting the first that actually contains bin/common.sh.
+# a batch scheduler may run the script from a spooled copy, so BASH_SOURCE need
+# not point into the repository. Each driver therefore tries SV_REPO_ROOT, then
+# its own location, then $PWD, accepting the first that contains bin/common.sh.
 #
 # The drivers used to hardcode absolute paths to one filesystem, which made them
 # unusable anywhere else. Everything machine-specific is now an environment

@@ -257,11 +257,14 @@ YAML_HEADER
     yaml_value "truvari_wes_pctseq"   "0"
     echo ""
 
-    # Resource limits
-    echo "# Resource limits (adjust to your cluster)"
-    yaml_value "max_cpus"   "48"
-    yaml_value "max_memory"  "'128.GB'"
-    yaml_value "max_time"    "'48.h'"
+    # Resource limits are not written: this script cannot know the machine or
+    # cluster the pipeline will run on, so the pipeline defaults apply unless the
+    # user sets them here or on the command line.
+    echo "# Resource limits: the pipeline defaults (nextflow.config) apply unless set here."
+    echo "# Set them to what your execution environment provides, for example:"
+    echo "# max_cpus: 16"
+    echo "# max_memory: '64.GB'"
+    echo "# max_time: '48.h'"
     echo ""
 
     # Simulation

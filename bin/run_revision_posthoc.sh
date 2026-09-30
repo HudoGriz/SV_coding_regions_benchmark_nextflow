@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=sv_posthoc
-#SBATCH --partition=cpu
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
-#SBATCH --time=1-00:00:00
 #
 # Post-hoc analyses of one finished revision run, for one assembly:
 #
@@ -17,7 +12,7 @@
 # Environment (optional):
 #   ANALYSIS_SIF, TRUVARI_SIF   local images instead of the published URIs
 #   SV_IMAGE_CACHE              where published images are pulled to
-#   SV_POSTHOC_JOBS             parallel per-pipeline jobs (default: cpus)
+#   SV_POSTHOC_JOBS             parallel per-pipeline jobs (default: all online CPUs)
 #   SV_COMPARE_RESULTS          results dir of an earlier run to compare against
 #                               (GRCh37: reproducibility; GRCh38: old vs new BAMs)
 set -euo pipefail
@@ -29,7 +24,7 @@ run_root=$(cd "$run_root" && pwd)
 repo_root=""
 for _candidate in "${SV_REPO_ROOT:-}" \
                   "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)" \
-                  "${SLURM_SUBMIT_DIR:-}" "$PWD"; do
+                  "$PWD"; do
     if [[ -n "$_candidate" && -f "$_candidate/bin/common.sh" ]]; then
         repo_root=$_candidate; break
     fi
@@ -75,7 +70,7 @@ done
 analysis() { "$engine" exec "${binds[@]}" "$analysis_sif" python3 "$@"; }
 truvari_py() { "$engine" exec "${binds[@]}" "$truvari_sif" python3 "$@"; }
 py="$repo_root/bin/python"
-jobs=${SV_POSTHOC_JOBS:-${SLURM_CPUS_PER_TASK:-4}}
+jobs=${SV_POSTHOC_JOBS:-$(getconf _NPROCESSORS_ONLN)}
 
 # Annotation BEDs for the simulation-fidelity table. Pinned GIAB v3.3
 # stratifications; the checksums go into the manifest.
@@ -90,7 +85,7 @@ pipeline_files="$out/logs/pipeline_files.sha256"
     echo "run_root=$run_root"
     echo "assembly=$assembly"
     echo "started_at=$(date --iso-8601=seconds)"
-    echo "slurm_job_id=${SLURM_JOB_ID:-}"
+    echo "host=$(hostname)"
     echo "params_file=$params_file"
     echo "code_tree_sha256=$(sha256sum < "$pipeline_files" | cut -d' ' -f1)"
     command -v git >/dev/null 2>&1 && git -C "$repo_root" rev-parse HEAD | sed 's/^/git_head=/'

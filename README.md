@@ -251,9 +251,8 @@ The default comparison is `high_confidence` versus `wes_utr`, labelled
 `--transition_hci_target`, `--transition_target`, and
 `--transition_target_label`.
 
-Nextflow itself runs on the host. On the KISLD HPC installation used for the
-paper, load it with `module load anaconda` followed by `conda activate nf-core`.
-Callers, Truvari, and the combined Python/R analysis environment remain separate
+Nextflow (25.04 or later) runs on the host and must be on `PATH`; how it gets
+there is up to the installation. Callers, Truvari, and the combined Python/R analysis environment remain separate
 process containers; the workflow is not launched from inside a container.
 
 > **Container engine.** The two custom images are published to a Singularity
@@ -271,7 +270,7 @@ environment variable, so they run unmodified on any machine:
 |----------|---------|---------|
 | `SV_DATA_ROOT` | *required* | Directory holding the prepared per-assembly data |
 | `SV_PROFILE` | `singularity` | Nextflow profile to run with |
-| `SV_HPC_CONFIG` | unset | Extra Nextflow config for a local cluster |
+| `SV_HPC_CONFIG` | unset | Extra Nextflow config for the execution environment (executor, queue, container cache) |
 | `SV_ENV_MODULE` | unset | Environment module to load before running |
 | `SV_CONDA_ENV` | unset | Conda environment to activate before running |
 | `TRUVARI_SIF` | published image | Local `.sif` or registry URI overriding the Truvari container |
@@ -282,14 +281,18 @@ Leaving `TRUVARI_SIF` and `ANALYSIS_SIF` unset is the reproducible choice: the
 pipeline then uses the published, immutable tags in `nextflow.config`. Setting
 either one is recorded in the run manifest along with its checksum.
 
-To reproduce the published runs on the machine that produced them:
+To reproduce the published runs, point the driver at your prepared data and at a
+Nextflow config for your execution environment:
 
 ```bash
 export SV_DATA_ROOT=/path/to/prepared/data
-export SV_ENV_MODULE=anaconda SV_CONDA_ENV=nf-core SV_PROFILE=cpu
-export SV_HPC_CONFIG=/home/Software/configs/nextflow_local/configs/conf/kisld_hpc.config
+export SV_HPC_CONFIG=/path/to/your/site.config   # optional: executor, queue, container cache
 bin/run_clean_dated_benchmark.sh 2026-08-03
 ```
+
+The drivers assume no scheduler. To run one as a batch job, submit it with your
+scheduler's own command; launchers specific to one site belong in the git-ignored
+`local/` directory, not in the repository.
 
 ### Revision runs (review round 1)
 
@@ -307,14 +310,14 @@ leaves every earlier run untouched.
   `*.analysis_contigs.sa_filtered.bam` files are the pipeline inputs. The earlier
   `filtered_bams/` (`-F 3852 -f 2` for Illumina, `-F 2308 -q 1` for long reads)
   are no longer used.
-- `bin/submit_revision_runs.sh <label> [GRCh37] [GRCh38]` submits one Slurm head
-  job per assembly. Each writes its params file with `generate_params.sh` and
-  runs `bin/run_revision_benchmark.sh`. That script launches each assembly from
-  its own directory under `$SV_DATA_ROOT/<label>/`, refuses to write into
-  existing results unless `SV_RESUME=1`, and records the params file, site
-  config, and a hash of the pipeline files (compute nodes may lack git).
-  `SV_DEPENDENCY_<assembly>` passes an sbatch dependency, for example to wait for
-  the BAM rebuild.
+- `bin/run_revision_benchmark.sh <label> <assembly>` runs the pipeline with the
+  revision settings (500 simulated interval sets, transition evidence, sensitivity
+  benchmarks) for one assembly, from its own directory under
+  `$SV_DATA_ROOT/<label>/`. It refuses to write into existing results unless
+  `SV_RESUME=1`, and records the params file, the execution config, the image
+  checksums and a hash of the pipeline files, so a run can be matched to a commit
+  even where the execution host has no git. Write the params file first with
+  `preparation/generate_params.sh`.
 - `bin/run_revision_posthoc.sh <run_root> <assembly>` runs every post-hoc
   analysis of a finished run into `<run_root>/posthoc/<assembly>/`:
   - the metrics and Truvari parameter tables;
@@ -327,14 +330,22 @@ leaves every earlier run untouched.
   - composition standardisation;
   - simulation fidelity.
 
-  The scripts are in `bin/python/` and run inside the pinned images.
+  The scripts are in `bin/python/` and run inside the pinned images. Parallel
+  jobs default to the number of online CPUs (`SV_POSTHOC_JOBS` overrides).
+- `bin/run_svanalyzer_posthoc.sh <run_root> <assembly>` runs the SVanalyzer
+  second-comparator check outside the pipeline (`SVANALYZER_SIF`, built from
+  `containers/Singularity.svanalyzer`).
 
 ```bash
 export SV_DATA_ROOT=/path/to/prepared/data
-export SV_ENV_MODULE=anaconda SV_CONDA_ENV=nf-core SV_PROFILE=cpu
-export SV_HPC_CONFIG=/home/Software/configs/nextflow_local/configs/conf/kisld_hpc.config
-bin/submit_revision_runs.sh revision1-2026-09-28 GRCh37 GRCh38
-sbatch bin/run_revision_posthoc.sh "$SV_DATA_ROOT/revision1-2026-09-28" GRCh37
+export SV_HPC_CONFIG=/path/to/your/site.config   # optional
+for asm in GRCh37 GRCh38; do
+    bash preparation/generate_params.sh --genome "$asm" --datadir "$SV_DATA_ROOT/$asm/data" \
+        --outfile "$SV_DATA_ROOT/$asm/params_$asm.revision1.yaml"
+    SV_PARAMS_FILE="$SV_DATA_ROOT/$asm/params_$asm.revision1.yaml" \
+        bin/run_revision_benchmark.sh revision1 "$asm"
+    bin/run_revision_posthoc.sh "$SV_DATA_ROOT/revision1" "$asm"
+done
 ```
 
 ## Repository Structure

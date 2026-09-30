@@ -12,27 +12,20 @@
 # overlap run in exactly one flag: --bench-overlaps is omitted. Nothing is
 # re-specified by hand.
 #
-# Submit, do not run on the login node:
-#   sbatch bin/run_containment_overlap_sensitivity.sh <run-dir> <assembly> <outdir>
-#SBATCH --job-name=truvari-containment
-#SBATCH --partition=cpu
-#SBATCH --cpus-per-task=2
-#SBATCH --mem=8G
-#SBATCH --time=4:00:00
-#SBATCH --output=%x-%j.log
+#   bin/run_containment_overlap_sensitivity.sh <run-dir> <assembly> <outdir>
 set -euo pipefail
 
 run_dir=${1:?usage: $0 <clean-rerun dir> <assembly> <outdir>}
 assembly=${2:?}
 outdir=${3:?}
 
-# Locate the repository. Under sbatch this runs from a spool copy, so
-# BASH_SOURCE does not point into the repo; SV_REPO_ROOT and the submit
+# Locate the repository. A batch scheduler may run this from a spooled copy, so
+# BASH_SOURCE need not point into the repo; SV_REPO_ROOT and the working
 # directory cover that case.
 repo_root=""
 for _candidate in "${SV_REPO_ROOT:-}" \
                   "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)" \
-                  "${SLURM_SUBMIT_DIR:-}" "$PWD"; do
+                  "$PWD"; do
     if [[ -n "$_candidate" && -f "$_candidate/bin/common.sh" ]]; then
         repo_root=$_candidate; break
     fi

@@ -1,6 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
+# Container runtime: Apptainer, or Singularity where only that name is installed.
+container_engine="$(command -v apptainer || command -v singularity || true)"
+[ -n "${container_engine}" ] || { echo "ERROR: neither apptainer nor singularity is on PATH" >&2; exit 1; }
+
 # =============================================================================
 # Restrict the GRCh38 BAMs to the contigs of the analysis reference
 # =============================================================================
@@ -72,7 +76,7 @@ if [ $# -gt 0 ] && [[ "$1" != --* ]]; then
 fi
 
 only=""
-threads=8
+threads=$(getconf _NPROCESSORS_ONLN)
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --only)    only="$2"; shift 2 ;;
@@ -102,7 +106,7 @@ for required in "${reference_fai}" "${samtools_image}" "${analysis_image}" "${sa
 done
 
 samtools() {
-  singularity exec "${samtools_image}" samtools "$@"
+  "${container_engine}" exec "${samtools_image}" samtools "$@"
 }
 
 # Print "name<TAB>length" for every @SQ line of a BAM, in header order.
@@ -279,13 +283,13 @@ filter_sa_entries() {
     printf 'script_sha256\t%s\n' "$(sha256sum "${sa_script}" | cut -d' ' -f1)"
     printf 'analysis_image\t%s\n' "${analysis_image}"
     printf 'analysis_image_sha256\t%s\n' "$(sha256sum "${analysis_image}" | cut -d' ' -f1)"
-    printf 'pysam\t%s\n' "$(singularity exec "${analysis_image}" python3 -c 'import pysam; print(pysam.__version__)')"
+    printf 'pysam\t%s\n' "$("${container_engine}" exec "${analysis_image}" python3 -c 'import pysam; print(pysam.__version__)')"
     printf 'samtools\t%s\n' "$(samtools --version | head -1)"
     printf 'started_at\t%s\n' "$(date --iso-8601=seconds)"
   } > "${work}/manifest.partial.tsv"
 
   echo "${label}: removing SA entries that name contigs absent from the header"
-  singularity exec -B "${out_dir}" -B "${script_dir}" "${analysis_image}" \
+  "${container_engine}" exec -B "${out_dir}" -B "${script_dir}" "${analysis_image}" \
     python3 "${sa_script}" --input "${in_bam}" --chunk-dir "${work}/chunks" --workers "${threads}" \
       --counts "${work}/counts.tsv" --dropped "${work}/dropped_contigs.tsv"
 

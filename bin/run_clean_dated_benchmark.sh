@@ -2,13 +2,13 @@
 set -euo pipefail
 
 run_date=${1:-$(date +%F)}
-# Locate the repository. Under sbatch this runs from a spool copy, so
-# BASH_SOURCE does not point into the repo; SV_REPO_ROOT and the submit
+# Locate the repository. A batch scheduler may run this from a spooled copy, so
+# BASH_SOURCE need not point into the repo; SV_REPO_ROOT and the working
 # directory cover that case.
 repo_root=""
 for _candidate in "${SV_REPO_ROOT:-}" \
                   "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)" \
-                  "${SLURM_SUBMIT_DIR:-}" "$PWD"; do
+                  "$PWD"; do
     if [[ -n "$_candidate" && -f "$_candidate/bin/common.sh" ]]; then
         repo_root=$_candidate; break
     fi

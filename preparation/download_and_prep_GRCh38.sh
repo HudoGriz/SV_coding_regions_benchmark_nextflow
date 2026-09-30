@@ -1,6 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
+# Container runtime: Apptainer, or Singularity where only that name is installed.
+container_engine="$(command -v apptainer || command -v singularity || true)"
+[ -n "${container_engine}" ] || { echo "ERROR: neither apptainer nor singularity is on PATH" >&2; exit 1; }
+
 # =============================================================================
 # Download and prepare GRCh38 data for SV benchmarking
 # =============================================================================
@@ -92,12 +96,12 @@ ensure_singularity_images() {
   echo "--- Ensuring Singularity images ---"
   mkdir -p "${singularity_dir}"
   cd "${singularity_dir}"
-  [ -f samtools_latest.sif ] || singularity pull --force samtools_latest.sif docker://quay.io/biocontainers/samtools:1.19--h50ea8bc_0
-  [ -f bedtools_latest.sif ] || singularity pull --force bedtools_latest.sif docker://quay.io/biocontainers/bedtools:2.31.1--h13024bc_3
+  [ -f samtools_latest.sif ] || "${container_engine}" pull --force samtools_latest.sif docker://quay.io/biocontainers/samtools:1.19--h50ea8bc_0
+  [ -f bedtools_latest.sif ] || "${container_engine}" pull --force bedtools_latest.sif docker://quay.io/biocontainers/bedtools:2.31.1--h13024bc_3
   # The same combined Python/R image the benchmarking pipeline runs, so target
   # BEDs are built under the R environment that later analyses use. It supersedes
   # the old r-env:4-4-1 image, which carried the same R 4.4.1 and packages.
-  [ -f "${ANALYSIS_IMAGE_NAME}" ] || singularity pull --force "${ANALYSIS_IMAGE_NAME}" "${ANALYSIS_IMAGE_URI}"
+  [ -f "${ANALYSIS_IMAGE_NAME}" ] || "${container_engine}" pull --force "${ANALYSIS_IMAGE_NAME}" "${ANALYSIS_IMAGE_URI}"
 }
 
 download_phase() {
@@ -180,13 +184,13 @@ postprocess_phase() {
   fi
 
   if [ ! -f "${references_dir}/human_GRCh38_no_alt_analysis_set.fasta.fai" ]; then
-    singularity exec \
+    "${container_engine}" exec \
       "${singularity_dir}/samtools_latest.sif" \
       samtools faidx "${references_dir}/human_GRCh38_no_alt_analysis_set.fasta"
   fi
 
   if [ ! -f "${references_dir}/GRCh38_HG002-T2TQ100-V1.0_stvar.vcf.gz.tbi" ]; then
-    singularity exec \
+    "${container_engine}" exec \
       "${singularity_dir}/samtools_latest.sif" \
       tabix -p vcf "${references_dir}/GRCh38_HG002-T2TQ100-V1.0_stvar.vcf.gz"
   fi
@@ -198,12 +202,12 @@ postprocess_phase() {
 # build_grch38_analysis_bams.sh, which skips any stage already built.
 echo "--- Restricting GRCh38 BAMs to the analysis contigs ---"
 for tech in illumina pacbio ont; do
-  bash "${SCRIPT_DIR}/build_grch38_analysis_bams.sh" "${project_dir}" "${singularity_dir}" --only "${tech}" --threads 30
+  bash "${SCRIPT_DIR}/build_grch38_analysis_bams.sh" "${project_dir}" "${singularity_dir}" --only "${tech}" --threads "${PREP_THREADS:-$(getconf _NPROCESSORS_ONLN)}"
 done
 
 # Create exome+UTR BED file (no --strip-chr: GRCh38 uses chr1,chr2,... natively)
 echo "--- Creating exome+UTR BED file ---"
-singularity exec \
+"${container_engine}" exec \
   -B "${project_dir}" \
   "${singularity_dir}/${ANALYSIS_IMAGE_NAME}" \
   Rscript "${SCRIPT_DIR}/create_gencode_target_bed.R" \
@@ -212,7 +216,7 @@ singularity exec \
 
 # Intersect exome+UTR with SV truth set benchmark regions
 echo "--- Intersecting exome+UTR with truth set ---"
-singularity exec \
+"${container_engine}" exec \
   -B "${project_dir}" \
   "${singularity_dir}/bedtools_latest.sif" \
   bedtools intersect \

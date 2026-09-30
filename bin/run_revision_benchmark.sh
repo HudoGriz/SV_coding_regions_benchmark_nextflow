@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=sv_revision
-#SBATCH --partition=cpu
-#SBATCH --cpus-per-task=2
-#SBATCH --mem=8G
-#SBATCH --time=7-00:00:00
-#
 # Run the full pipeline for one assembly into a new run directory:
 #
 #   bin/run_revision_benchmark.sh <run_label> <assembly>
@@ -17,18 +11,19 @@
 # SV_RESUME=1 to continue an interrupted run of the same label and assembly;
 # nothing outside that run directory is ever written.
 #
+# Where the tasks run (local machine, a scheduler, the cloud) is decided only by
+# the Nextflow profile and config given below; the script assumes no scheduler.
+# To run it as a batch job, submit it with your scheduler's own command.
+#
 # Environment (all optional except SV_DATA_ROOT):
 #   SV_DATA_ROOT     directory holding the prepared per-assembly data
 #   SV_PARAMS_FILE   params file (default $SV_DATA_ROOT/<assembly>/params_<assembly>.yaml)
-#   SV_HPC_CONFIG    extra Nextflow config for the local cluster
+#   SV_HPC_CONFIG    extra Nextflow config for the execution environment
 #   SV_PROFILE       Nextflow profile (default singularity)
 #   SV_ENV_MODULE    environment module that provides conda or nextflow
 #   SV_CONDA_ENV     conda environment with nextflow
 #   SV_MAX_TIME      ceiling on any task's time request (default 120.h)
 #   SV_RESUME        1 to resume this run instead of refusing
-#   SV_STALL_MINUTES restart Nextflow with -resume after this long with no job of
-#                    the run in Slurm and no new trace line (default 20)
-#   SV_MAX_RESTARTS  give up after this many stall restarts (default 20)
 #   ANALYSIS_SIF, TRUVARI_SIF   local images overriding the published defaults
 set -euo pipefail
 
@@ -37,12 +32,12 @@ assembly=${2:?usage: run_revision_benchmark.sh <run_label> <assembly>}
 [[ "$assembly" == GRCh37 || "$assembly" == GRCh38 ]] || {
     echo "ERROR: assembly must be GRCh37 or GRCh38, got $assembly" >&2; exit 1; }
 
-# Under sbatch this runs from a spool copy, so BASH_SOURCE does not point into
-# the repo; SV_REPO_ROOT and the submit directory cover that case.
+# A batch scheduler may run this from a spooled copy, so BASH_SOURCE need not
+# point into the repository; SV_REPO_ROOT and the working directory cover that.
 repo_root=""
 for _candidate in "${SV_REPO_ROOT:-}" \
                   "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)" \
-                  "${SLURM_SUBMIT_DIR:-}" "$PWD"; do
+                  "$PWD"; do
     if [[ -n "$_candidate" && -f "$_candidate/bin/common.sh" ]]; then
         repo_root=$_candidate; break
     fi
@@ -73,8 +68,8 @@ mkdir -p "$run_root/logs" "$launch_dir" "$work_dir"
 manifest="$run_root/RUN_MANIFEST.$assembly.txt"
 stamp=$(date +%Y%m%dT%H%M%S)
 
-# Compute nodes may have no git, so the pipeline code is also identified by a
-# hash of the files that define it. The per-file listing lets any commit be
+# The execution host may have no git, so the pipeline code is also identified by
+# a hash of the files that define it. The per-file listing lets any commit be
 # matched to the run later: hash the same paths in a checkout of that commit.
 pipeline_files="$run_root/logs/pipeline_files.$assembly.$stamp.sha256"
 (
@@ -87,7 +82,7 @@ pipeline_files="$run_root/logs/pipeline_files.$assembly.$stamp.sha256"
     echo "assembly=$assembly"
     echo "started_at=$(date --iso-8601=seconds)"
     echo "resume=$resume"
-    echo "slurm_job_id=${SLURM_JOB_ID:-}"
+    echo "host=$(hostname)"
     echo "pipeline=$repo_root"
     echo "pipeline_tree_sha256=$(sha256sum < "$pipeline_files" | cut -d' ' -f1)  ($(wc -l < "$pipeline_files") files, listed in $pipeline_files)"
     if command -v git >/dev/null 2>&1; then
@@ -138,87 +133,30 @@ nf_args=(-params-file "$params_file" -profile "${SV_PROFILE:-singularity}")
 [[ -n "$truvari_sif" ]] && nf_args+=(--truvari_container "$truvari_sif")
 [[ "$resume" == 1 ]] && nf_args+=(-resume)
 
-cd "$launch_dir"
-
-# Stall watchdog. On this cluster the Nextflow task monitor has repeatedly
-# stopped reaping finished Slurm jobs: every job completes and writes its
-# .exitcode, but the executor believes its queueSize is full and submits nothing
-# more, indefinitely. When the run has no job of its own in Slurm and its trace
-# has not grown for SV_STALL_MINUTES, Nextflow is stopped and relaunched with
-# -resume, which reuses every task it did reap. Long single tasks keep a job in
-# the queue, so they never look like a stall.
-stall_minutes=${SV_STALL_MINUTES:-20}
-max_restarts=${SV_MAX_RESTARTS:-20}
-trace="$results/pipeline_info/trace.txt"
-trace_lines() { if [[ -f "$trace" ]]; then wc -l < "$trace"; else echo 0; fi; }
-queued_jobs() { squeue -u "$USER" -h -o '%Z' 2>/dev/null | grep -c "^$work_dir/" || true; }
-
 # Nextflow refuses to start when the trace, report or timeline file exists, so
-# a resumed attempt first moves the previous attempt's files aside.
-rotate_pipeline_info() {
-    local file
+# a resumed run first moves the previous attempt's files aside.
+if [[ "$resume" == 1 ]]; then
     for file in trace.txt report.html timeline.html; do
-        [[ -e "$results/pipeline_info/$file" ]] && mv "$results/pipeline_info/$file" "$results/pipeline_info/${file%.*}.until-$(date +%Y%m%dT%H%M%S).${file##*.}"
+        [[ -e "$results/pipeline_info/$file" ]] && mv "$results/pipeline_info/$file" "$results/pipeline_info/${file%.*}.until-$stamp.${file##*.}"
     done
-    return 0
-}
+fi
 
-attempt=0
+cd "$launch_dir"
+echo "[$(date --iso-8601=seconds)] Starting $assembly (resume=$resume)" | tee -a "$run_root/RUN_STATUS.log"
 status=0
-while :; do
-    attempt=$((attempt + 1))
-    attempt_args=("${nf_args[@]}")
-    if [[ "$attempt" -gt 1 && "$resume" != 1 ]]; then
-        attempt_args+=(-resume)
-    fi
-    if [[ "$attempt" -gt 1 || "$resume" == 1 ]]; then
-        rotate_pipeline_info
-    fi
-    echo "[$(date --iso-8601=seconds)] Starting $assembly (resume=$resume, attempt $attempt)" | tee -a "$run_root/RUN_STATUS.log"
-    nextflow -log "$run_root/logs/nextflow.$assembly.$stamp.attempt$attempt.log" run "$repo_root" \
-        "${attempt_args[@]}" \
-        -work-dir "$work_dir" \
-        --outdir "$results" \
-        --run_name "${assembly}_${run_label}" \
-        --reference_assembly "$assembly" \
-        --max_time "${SV_MAX_TIME:-120.h}" \
-        --num_simulations 500 \
-        --simulate_targets true \
-        --gather_statistics true \
-        --generate_transition_evidence true \
-        --sensitivity_benchmarks true \
-        -ansi-log false >> "$run_root/logs/run_$assembly.$stamp.out" 2>&1 &
-    nf_pid=$!
-
-    stalled=0
-    last_lines=$(trace_lines)
-    active_at=$(date +%s)
-    while kill -0 "$nf_pid" 2>/dev/null; do
-        sleep 60
-        lines=$(trace_lines)
-        if [[ "$lines" != "$last_lines" || "$(queued_jobs)" -gt 0 ]]; then
-            last_lines=$lines
-            active_at=$(date +%s)
-        elif (( $(date +%s) - active_at >= stall_minutes * 60 )); then
-            echo "[$(date --iso-8601=seconds)] $assembly stalled: no job in Slurm and no new trace line for ${stall_minutes} min; restarting with -resume" \
-                | tee -a "$run_root/RUN_STATUS.log"
-            stalled=1
-            kill -TERM "$nf_pid" 2>/dev/null || true
-            for _ in $(seq 1 60); do kill -0 "$nf_pid" 2>/dev/null || break; sleep 5; done
-            kill -KILL "$nf_pid" 2>/dev/null || true
-            break
-        fi
-    done
-    status=0
-    wait "$nf_pid" || status=$?
-    [[ "$stalled" == 1 ]] || break
-    if [[ "$attempt" -gt "$max_restarts" ]]; then
-        echo "[$(date --iso-8601=seconds)] $assembly gave up after $attempt attempts" | tee -a "$run_root/RUN_STATUS.log"
-        status=1
-        break
-    fi
-    sleep 20
-done
+nextflow -log "$run_root/logs/nextflow.$assembly.$stamp.log" run "$repo_root" \
+    "${nf_args[@]}" \
+    -work-dir "$work_dir" \
+    --outdir "$results" \
+    --run_name "${assembly}_${run_label}" \
+    --reference_assembly "$assembly" \
+    --max_time "${SV_MAX_TIME:-120.h}" \
+    --num_simulations 500 \
+    --simulate_targets true \
+    --gather_statistics true \
+    --generate_transition_evidence true \
+    --sensitivity_benchmarks true \
+    -ansi-log false >> "$run_root/logs/run_$assembly.$stamp.out" 2>&1 || status=$?
 
 if [[ "$status" == 0 ]]; then
     echo "[$(date --iso-8601=seconds)] Completed $assembly" | tee -a "$run_root/RUN_STATUS.log"

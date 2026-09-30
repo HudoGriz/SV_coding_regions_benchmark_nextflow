@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=sv_svanalyzer
-#SBATCH --partition=cpu
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
-#SBATCH --time=2-00:00:00
 #
 # Second-comparator check, outside the pipeline:
 #
@@ -18,7 +13,7 @@
 #
 # Environment:
 #   SVANALYZER_SIF   image built from containers/Singularity.svanalyzer (required)
-#   TRUVARI_SIF, ANALYSIS_SIF, SV_IMAGE_CACHE   as for run_revision_posthoc.sh
+#   TRUVARI_SIF, ANALYSIS_SIF, SV_IMAGE_CACHE, SV_POSTHOC_JOBS   as for run_revision_posthoc.sh
 #   SVA_MAXDIST (500), SVA_NORMSHIFT (1.0), SVA_NORMSIZEDIFF (0.3), SVA_NORMDIST (1.0)
 #     maxdist mirrors Truvari's refdist, normsizediff 0.3 its pctsize 0.7, and
 #     normdist 1.0 its pctseq 0 (no sequence requirement); normshift keeps the
@@ -33,7 +28,7 @@ run_root=$(cd "$run_root" && pwd)
 repo_root=""
 for _candidate in "${SV_REPO_ROOT:-}" \
                   "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)" \
-                  "${SLURM_SUBMIT_DIR:-}" "$PWD"; do
+                  "$PWD"; do
     if [[ -n "$_candidate" && -f "$_candidate/bin/common.sh" ]]; then
         repo_root=$_candidate; break
     fi
@@ -141,7 +136,7 @@ run_pipeline() {
 export -f run_pipeline
 for spec in "${pipelines[@]}"; do
     printf '%s\t%s\n' "$spec" "${raw_vcf[$spec]}"
-done | xargs -P "${SLURM_CPUS_PER_TASK:-4}" -L1 bash -c \
+done | xargs -P "${SV_POSTHOC_JOBS:-$(getconf _NPROCESSORS_ONLN)}" -L1 bash -c \
     'run_pipeline "$0" "$1" > "$out/logs/${0/:/_}.log" 2>&1'
 
 # One summary table for the assembly.

@@ -35,12 +35,11 @@ preparation/               # Shell scripts for data download/prep
 ## Build / Run / Test Commands
 
 ```bash
-# Nextflow has to be on PATH. On this HPC host that means:
-module load anaconda
-conda activate nf-core
-# The bin/ drivers do this for you when SV_ENV_MODULE and SV_CONDA_ENV are set,
-# and skip it anywhere Nextflow is already installed. See the environment table
-# in README.md; no driver hardcodes a path to this machine.
+# Nextflow (>= 25.04) has to be on PATH. The bin/ drivers can load it for you
+# when SV_ENV_MODULE and/or SV_CONDA_ENV are set, and skip that step anywhere
+# Nextflow is already installed. See the environment table in README.md. Nothing
+# in the repository may hardcode a path, scheduler, partition or CPU count of one
+# machine; site-specific launchers go in the git-ignored local/ directory.
 
 # Quick validation / syntax check (the CI lint step, no containers needed)
 nextflow run . -profile test_nfcore --help
@@ -222,8 +221,8 @@ Override behavior in `conf/modules.config` via `withName:` blocks.
 - The transition-evidence and padding processes run `python3 ${projectDir}/bin/python/*.py`
   inside the analysis image, like the R scripts. Scripts can change without a
   new image, and a run's code is the commit, not whatever was baked into the image.
-- Drivers: `bin/submit_revision_runs.sh` / `bin/run_revision_benchmark.sh`
-  (full runs; refuse to overwrite; `SV_RESUME=1` to resume),
+- Drivers: `bin/run_revision_benchmark.sh` (full run of one assembly; refuses to
+  overwrite; `SV_RESUME=1` to resume; no scheduler assumed),
   `bin/run_revision_posthoc.sh` (post-hoc tables), and
   `bin/run_svanalyzer_posthoc.sh` (second-comparator check, never in the pipeline).
 - GRCh38 BAMs: `preparation/build_grch38_analysis_bams.sh` restricts to the
@@ -233,8 +232,8 @@ Override behavior in `conf/modules.config` via `withName:` blocks.
   `python manta/runWorkflow.py`, which matches the `bin/python/` directory, so adding or removing a file
   there invalidates Manta's cache (and every Manta benchmark) on the next `-resume`. Do not add or remove
   files in `bin/python/` while a run that may be resumed is in flight.
-- Compute nodes have no git. The drivers record a hash of the pipeline files
-  instead; match it to a commit on the login node.
+- The drivers record a hash of the pipeline files as well as the git commit,
+  because the execution host may have no git; match the hash to a commit later.
 
 ## Key Parameters
 

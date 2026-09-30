@@ -21,6 +21,7 @@ process TARGET_TRANSITION_AUDIT {
     def pipeline = "${target_meta.technology}:${target_meta.tool}"
     def safe_id = pair_id.replaceAll(/[^A-Za-z0-9_.-]/, '_')
     """
+    # Record identity includes the sample genotype (target_transition_audit.py).
     mkdir -p hci target evidence
     cp ${hci_files.join(' ')} hci/
     cp ${target_files.join(' ')} target/
@@ -112,6 +113,7 @@ process SIMULATION_TRANSITION_AUDIT {
     def pipeline = "${target_meta.technology}:${target_meta.tool}"
     def safe_id = pair_id.replaceAll(/[^A-Za-z0-9_.-]/, '_')
     """
+    # Record identity includes the sample genotype (target_transition_audit.py).
     mkdir -p hci target simulation_evidence
     cp ${hci_files.join(' ')} hci/
     cp ${target_files.join(' ')} target/

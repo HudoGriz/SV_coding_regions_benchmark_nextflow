@@ -7,10 +7,21 @@
 // numbered directory because many of them share a name (params.json, and the
 // same bench prefix under different settings).
 
-// Shell code that links every staged file to its place under results/.
-def link_results_tree(manifest) {
+// Environment for every post-hoc task: no bytecode written into bin/python (a new
+// entry there would change Manta's cache key), and numerical libraries held to the
+// task's CPUs. Unset, they start one thread per core of the node, which on a
+// one-CPU allocation slowed the fidelity step roughly sixfold.
+def thread_limits(cpus) {
     """
     export PYTHONDONTWRITEBYTECODE=1
+    export OMP_NUM_THREADS=${cpus} OPENBLAS_NUM_THREADS=${cpus} MKL_NUM_THREADS=${cpus} NUMEXPR_NUM_THREADS=${cpus}
+    """
+}
+
+// Shell code that links every staged file to its place under results/.
+def link_results_tree(manifest, cpus) {
+    """
+    ${thread_limits(cpus)}
     i=0
     while IFS=\$'\\t' read -r rel name; do
         [ -n "\$rel" ] || continue
@@ -41,7 +52,7 @@ process POSTHOC_METRICS {
 
     script:
     """
-    ${link_results_tree(manifest)}
+    ${link_results_tree(manifest, task.cpus)}
     python3 ${projectDir}/bin/python/collect_benchmark_metrics.py --results results --assembly ${assembly} \\
         --include-simulations --output metrics.tsv --params-output truvari_parameters.tsv
     if [ -n "${compare_results}" ]; then
@@ -74,7 +85,7 @@ process POSTHOC_SVTYPE_ACCOUNTING {
 
     script:
     """
-    ${link_results_tree(manifest)}
+    ${link_results_tree(manifest, task.cpus)}
     python3 ${projectDir}/bin/python/svtype_accounting.py --results results --assembly ${assembly} \\
         --hci-bed ${hci_bed} --truth-vcf ${truth_vcf} --output svtype_accounting.tsv \\
         | tee svtype_accounting.log
@@ -104,7 +115,7 @@ process POSTHOC_DECOMPOSITION {
     script:
     def name = pipeline.replace(':', '_')
     """
-    ${link_results_tree(manifest)}
+    ${link_results_tree(manifest, task.cpus)}
     python3 ${projectDir}/bin/python/metric_decomposition.py --results results --assembly ${assembly} \\
         --pipeline "${pipeline}" --hci-target ${params.transition_hci_target} \\
         --target "${params.transition_target}=${target_bed}" --target "gene_panel=${gene_panel_bed}" \\
@@ -137,7 +148,7 @@ process POSTHOC_STRATIFY {
     def (technology, caller) = pipeline.tokenize(':')
     def name = pipeline.replace(':', '_')
     """
-    ${link_results_tree(manifest)}
+    ${link_results_tree(manifest, task.cpus)}
     python3 ${projectDir}/bin/python/stratify_post_matching.py \\
         --hci-bench results/real_intervals/${technology}/truvari/${caller}/${params.transition_hci_target} \\
         --target "${params.transition_target}=${target_bed}" --target "gene_panel=${gene_panel_bed}" \\
@@ -214,7 +225,7 @@ process POSTHOC_SENSITIVITY {
 
     script:
     """
-    ${link_results_tree(manifest)}
+    ${link_results_tree(manifest, task.cpus)}
     python3 ${projectDir}/bin/python/sensitivity_transitions.py --results results --assembly ${assembly} \\
         --target ${params.transition_target} --hci-target ${params.transition_hci_target} \\
         --target-label '${params.transition_target_label}' --target-bed ${target_bed} \\
@@ -241,7 +252,7 @@ process POSTHOC_COMPOSITION {
     // A single staged file arrives as a Path, which Groovy would iterate by name element.
     def strata_args = [strata].flatten().collect { file -> "--strata ${file}" }.join(' ')
     """
-    export PYTHONDONTWRITEBYTECODE=1
+    ${thread_limits(task.cpus)}
     python3 ${projectDir}/bin/python/composition_standardisation.py ${strata_args} \\
         --target ${params.transition_target} --output composition_standardisation.tsv
     """
@@ -269,7 +280,7 @@ process POSTHOC_FIDELITY {
     def annotation_args = [[labels].flatten(), [annotations].flatten()].transpose()
         .collect { label, bed -> "--annotation ${label}=${bed}" }.join(' ')
     """
-    export PYTHONDONTWRITEBYTECODE=1
+    ${thread_limits(task.cpus)}
     python3 ${projectDir}/bin/python/simulation_fidelity.py --target-bed ${target_bed} \\
         --simulation-dir simulated_targets --reference ${fasta} ${annotation_args} --prefix fidelity
     """

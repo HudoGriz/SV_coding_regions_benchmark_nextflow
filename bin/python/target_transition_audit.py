@@ -54,16 +54,20 @@ class Record:
     end: int
     match_id: str
     allele_digest: str
+    genotype: str = ""
 
     @property
     def key(self) -> tuple:
         # Position/type/length are not a unique record identity.  In particular,
         # the denser GRCh38 truth VCF contains distinct resolved alleles with the
         # same values for all of those fields.  Include a compact REF/ALT digest
-        # so outcome comparisons cannot collapse multiallelic records.
+        # so outcome comparisons cannot collapse multiallelic records.  It also
+        # writes some homozygous variants as two records with identical alleles,
+        # one per haplotype (1|0 and 0|1); Truvari scores both, so the genotype is
+        # part of the identity too.
         return (
             self.chrom, self.pos, self.record_id, self.svtype, self.svlen,
-            self.allele_digest,
+            self.allele_digest, self.genotype,
         )
 
 
@@ -104,6 +108,16 @@ def parse_record(line: str) -> Record:
     else:
         end = start + max(svlen, 1)
     match = MATCH_RE.search(info)
+    # FORMAT and the first sample follow INFO; the genotype distinguishes
+    # per-haplotype copies of the same allele.
+    genotype = ""
+    sample_columns = remainder[tab_positions[4] + 1:].rstrip("\n").split("\t")
+    if len(sample_columns) >= 2:
+        format_keys = sample_columns[0].split(":")
+        if "GT" in format_keys:
+            values = sample_columns[1].split(":")
+            index = format_keys.index("GT")
+            genotype = values[index] if index < len(values) else ""
     return Record(
         chrom=chrom,
         pos=pos,
@@ -114,6 +128,7 @@ def parse_record(line: str) -> Record:
         end=end,
         match_id=match.group(1) if match else "",
         allele_digest=allele_digest,
+        genotype=genotype,
     )
 
 
@@ -347,6 +362,7 @@ def audit_one(
             "truth_svtype": truth.svtype,
             "truth_svlen": truth.svlen,
             "truth_allele_digest": truth.allele_digest,
+            "truth_genotype": truth.genotype,
             "truth_start": truth.start,
             "truth_end": truth.end,
             "hci_match_id": truth.match_id,
@@ -356,6 +372,7 @@ def audit_one(
             "candidate_svtype": candidate.svtype,
             "candidate_svlen": candidate.svlen,
             "candidate_allele_digest": candidate.allele_digest,
+            "candidate_genotype": candidate.genotype,
             "candidate_start": candidate.start,
             "candidate_end": candidate.end,
             "start_distance": candidate.start - truth.start if candidate.chrom else math.nan,
@@ -407,11 +424,13 @@ def audit_one(
             "truth_chrom": truth.chrom, "truth_pos": truth.pos, "truth_id": truth.record_id,
             "truth_svtype": truth.svtype, "truth_svlen": truth.svlen,
             "truth_allele_digest": truth.allele_digest,
+            "truth_genotype": truth.genotype,
             "truth_start": truth.start, "truth_end": truth.end, "hci_match_id": "",
             "candidate_chrom": candidate.chrom, "candidate_pos": candidate.pos,
             "candidate_id": candidate.record_id, "candidate_svtype": candidate.svtype,
             "candidate_svlen": candidate.svlen, "candidate_start": candidate.start,
             "candidate_allele_digest": candidate.allele_digest,
+            "candidate_genotype": candidate.genotype,
             "candidate_end": candidate.end,
             "start_distance": candidate.start - truth.start if candidate.chrom else math.nan,
             "end_distance": candidate.end - truth.end if candidate.chrom else math.nan,

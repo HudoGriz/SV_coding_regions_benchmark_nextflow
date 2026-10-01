@@ -66,7 +66,7 @@ workflow {
           --outdir               Output directory (default: results)
           --run_name             Run name (default: benchmarking_run)
           --tandem_repeats       Tandem repeats BED file (for Sniffles)
-          --skip_delly           Skip Delly on Illumina WGS (default: false)
+          --skip_delly           Skip Delly on Illumina WGS and WES (default: false)
           --delly_exclude        Delly exclude template (telomeres, centromeres)
           --exclude_homref_calls Drop calls genotyped 0/0 before benchmarking (default: true)
           
@@ -118,7 +118,9 @@ workflow {
     
     // Log which technologies are being analyzed
     def technologies = []
-    if (params.illumina_wes_bam) technologies << "Illumina WES (Manta)"
+    if (params.illumina_wes_bam) {
+        technologies << (params.skip_delly || !params.wes_sequencing_targets ? "Illumina WES (Manta)" : "Illumina WES (Manta, Delly)")
+    }
     if (params.illumina_wgs_bam) {
         technologies << (params.skip_delly ? "Illumina WGS (Manta only - Delly skipped)" : "Illumina WGS (Manta, Delly)")
     }

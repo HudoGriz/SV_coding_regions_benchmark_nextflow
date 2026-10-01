@@ -41,6 +41,7 @@ RAW_VCF = {
     ("Illumina_WGS", "Manta"): "Illumina_WGS/Manta/*.diploid_sv.vcf.gz",
     ("Illumina_WGS", "Delly"): "Illumina_WGS/Delly/*.vcf.gz",
     ("Illumina_WES", "Manta"): "Illumina_WES/Manta/*.diploid_sv.vcf.gz",
+    ("Illumina_WES", "Delly"): "Illumina_WES/Delly/*.vcf.gz",
     ("ONT", "CuteSV"): "ONT/CuteSV/*.vcf.gz",
     ("ONT", "Sniffles"): "ONT/Sniffles/*.vcf.gz",
     ("PacBio", "CuteSV"): "PacBio/CuteSV/*.vcf.gz",

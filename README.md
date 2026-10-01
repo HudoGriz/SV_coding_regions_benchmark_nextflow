@@ -31,7 +31,7 @@ PREPARE_REFERENCES ─> SV_CALLING ─> BENCHMARKING ─┬─> SIMULATE_AND_BEN
 
 | Technology | SV Callers | Notes |
 |-----------|-----------|-------|
-| Illumina WES | Manta | Uses `--exome` flag; requires capture target BED |
+| Illumina WES | Manta, Delly | Manta uses `--exome` with the capture BED as call regions; Delly excludes everything outside the capture targets (it has no exome mode) |
 | Illumina WGS | Manta, Delly | Delly (v1.7.3) runs with its exclude template; skip with `--skip_delly` |
 | PacBio HiFi | CuteSV, Pbsv | Pbsv can be skipped with `--skip_pbsv` |
 | ONT | CuteSV, Sniffles | Sniffles supports tandem repeat annotation |
@@ -134,7 +134,7 @@ At least one BAM file must be provided.
 |-----------|---------|-------------|
 | `skip_benchmarking` | `false` | Skip Truvari benchmarking |
 | `skip_pbsv` | `false` | Skip Pbsv caller for PacBio data |
-| `skip_delly` | `false` | Skip Delly on Illumina WGS |
+| `skip_delly` | `false` | Skip Delly on Illumina WGS and WES |
 | `delly_exclude` | `null` | Delly exclude template (downloaded by the preparation scripts) |
 | `sensitivity_benchmarks` | `false` | Re-score the real targets under alternative settings (`sensitivity_*` parameters) |
 | `simulate_targets` | `false` | Enable simulated interval analysis |

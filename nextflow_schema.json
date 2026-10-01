@@ -113,8 +113,8 @@
                 "skip_delly": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Skip Delly, the second short-read caller, on Illumina WGS",
-                    "help_text": "Delly runs on Illumina WGS only; WES is called with Manta alone."
+                    "description": "Skip Delly, the second short-read caller, on Illumina WGS and WES",
+                    "help_text": "On WES, Delly runs only when wes_sequencing_targets is set: everything outside the capture targets is added to its exclude template."
                 },
                 "exclude_homref_calls": {
                     "type": "boolean",

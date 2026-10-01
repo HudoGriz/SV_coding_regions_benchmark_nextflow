@@ -263,8 +263,8 @@ def _panel_d(fig):
     ax.text(padded[1] + 2.0, y_pad, "+500 bp", ha="left", va="center",
             fontsize=FS_TICK, color=C_TARGET_EDGE)
     _caption(ax,
-             "Padding by the 500 bp match distance restores the",
-             "pair: 70 of 70 on GRCh37 and 111 of 111 on GRCh38.")
+             "Padding by the 500 bp match distance makes the",
+             "call eligible again and restores the pair.")
 
 
 def schematic_figure():

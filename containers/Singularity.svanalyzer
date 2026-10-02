@@ -1,12 +1,14 @@
 # SVanalyzer 0.36 with the edlib-aligner executable its benchmark tool calls.
 #
-# The bioconda svanalyzer package does not ship edlib-aligner, so `svanalyzer
-# benchmark` stops at start-up. The binary is copied from the pinned edlib
-# biocontainer; it needs only libstdc++ and libgcc_s, which the svanalyzer image
-# already provides in a newer, backward-compatible version.
+# The bioconda build 0.36--pl5321hdfd78af_2 does not ship edlib-aligner, so
+# `svanalyzer benchmark` stops at start-up. The binary is copied from the pinned
+# edlib biocontainer; it needs only libstdc++ and libgcc_s, which the svanalyzer
+# image already provides in a newer, backward-compatible version.
 #
-# Used only for the post-hoc comparator replication (bin/run_svanalyzer_posthoc.sh),
-# never by the pipeline. Build: apptainer build svanalyzer-edlib.sif containers/Singularity.svanalyzer
+# The pipeline does not need this image: its post-hoc SVanalyzer step uses the
+# earlier bioconda build 0.36--pl5262hdfd78af_1, which ships the same
+# edlib-aligner binary (identical md5). This recipe remains for
+# bin/run_svanalyzer_posthoc.sh. Build: apptainer build svanalyzer-edlib.sif containers/Singularity.svanalyzer
 
 Bootstrap: docker
 From: quay.io/biocontainers/edlib:1.2.3--h2d50403_1

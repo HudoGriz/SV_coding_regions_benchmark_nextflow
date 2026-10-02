@@ -239,7 +239,7 @@
                 "posthoc_analyses": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Run the post-hoc analyses: decomposition, post-matching stratification, bootstrap, sensitivity audits, composition standardisation and simulation fidelity",
+                    "description": "Run the post-hoc analyses: decomposition, post-matching stratification, bootstrap, sensitivity audits, composition standardisation, simulation fidelity, membership counts, the SVanalyzer replication and every value the manuscript reports",
                     "help_text": "Needs a truth set and --simulate_targets true; with --sensitivity_benchmarks it also needs --generate_transition_evidence true. Outputs go to <outdir>/posthoc/."
                 },
                 "posthoc_compare_results": {
@@ -254,6 +254,10 @@
                 "posthoc_lowmappability": {
                     "type": "string",
                     "description": "Low-mappability BED for the simulation-fidelity table (default: GIAB v3.3 for --reference_assembly)"
+                },
+                "svanalyzer_container": {
+                    "type": "string",
+                    "description": "SVanalyzer image for the post-hoc second-comparator step (default: bioconda svanalyzer 0.36--pl5262hdfd78af_1, which ships edlib-aligner)"
                 },
                 "reference_assembly": {
                     "type": "string",

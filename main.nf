@@ -176,8 +176,10 @@ workflow {
     // calls, and all of them need a truth set, so without one the step is skipped.
     //
     ch_calls = SV_CALLING.out.vcfs
+    ch_homref_counts = Channel.empty()
     if (params.exclude_homref_calls && params.benchmark_vcf) {
         EXCLUDE_HOMREF_CALLS(SV_CALLING.out.vcfs)
+        ch_homref_counts = EXCLUDE_HOMREF_CALLS.out.counts
         ch_calls = SV_CALLING.out.vcfs
             .join(EXCLUDE_HOMREF_CALLS.out.vcf)
             .map { meta, vcf, tbi, filtered_vcf, filtered_tbi, removed ->
@@ -315,6 +317,9 @@ workflow {
             ch_benchmark_vcf.combine(ch_benchmark_vcf_tbi),
             ch_fasta.combine(ch_fasta_fai),
             params.generate_transition_evidence ? TARGET_TRANSITION_EVIDENCE.out.evidence : Channel.empty(),
+            params.generate_transition_evidence ? TARGET_TRANSITION_EVIDENCE.out.simulation_evidence : Channel.empty(),
+            params.gather_statistics ? ANALYSIS_AND_PLOTS.out.tables : Channel.empty(),
+            ch_homref_counts,
             params.reference_assembly
         )
     }

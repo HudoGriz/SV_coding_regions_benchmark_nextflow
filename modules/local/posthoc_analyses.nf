@@ -290,3 +290,210 @@ process POSTHOC_FIDELITY {
     touch fidelity.summary.tsv
     """
 }
+
+// Precision with and without the candidate inversions every real-target benchmark
+// scores as false positives (neither truth set contains inversions).
+process POSTHOC_INVERSION_PRECISION {
+    tag "${assembly}"
+    label 'process_single'
+
+    input:
+    tuple val(manifest), path(files, stageAs: 'f*/*')
+    path metrics
+    val assembly
+
+    output:
+    path "inversion_precision.tsv", emit: table
+
+    script:
+    """
+    ${link_results_tree(manifest, task.cpus)}
+    python3 ${projectDir}/bin/python/inversion_precision.py --results results --metrics ${metrics} \\
+        --output inversion_precision.tsv
+    """
+
+    stub:
+    """
+    touch inversion_precision.tsv
+    """
+}
+
+// Truth records admitted by containment and by any overlap: counted directly in
+// every simulated set with Truvari's conventions (checked against the real
+// target's Truvari counts first), and in the real target by plain VCF-BED
+// intersection. The target is clipped to HCI and merged exactly as the
+// benchmarks use it.
+process POSTHOC_MEMBERSHIP {
+    tag "${assembly}"
+    label 'process_single'
+
+    input:
+    tuple path(tp_base), path(fn)
+    tuple path(target_bed), path(hci_bed)
+    path simulated_beds, stageAs: 'simulated_targets/*'
+    path metrics
+    val assembly
+
+    output:
+    path "membership.*.tsv", emit: tables
+
+    script:
+    """
+    ${thread_limits(task.cpus)}
+    python3 ${projectDir}/bin/python/pad_target_bed.py --target ${target_bed} --allowed ${hci_bed} \\
+        --padding 0 --output target.pad0.bed
+    python3 ${projectDir}/bin/python/truth_membership.py --tp-base ${tp_base} --fn ${fn} \\
+        --target-bed target.pad0.bed --simulation-dir simulated_targets --metrics ${metrics} \\
+        --target ${params.transition_target} --prefix membership
+    """
+
+    stub:
+    """
+    touch membership.summary.tsv membership.simulated.tsv membership.boundary_records.tsv
+    """
+}
+
+// Second comparator. Truth and candidate records are restricted independently to
+// HCI and to the target with Truvari's own membership and filters, so only the
+// comparator differs from the Truvari analysis; IDs are rewritten to stable,
+// record-derived ones because SVanalyzer identifies variants by ID.
+process POSTHOC_SVANALYZER_PREFILTER {
+    tag "${name}"
+    label 'process_single'
+
+    input:
+    tuple val(name), path(vcf), path(tbi)
+    tuple path(hci_bed), path(target_bed)
+
+    output:
+    tuple val(name), path("${name}.{hci,target}.vcf.gz{,.tbi}"), emit: vcfs
+
+    script:
+    def id_prefix = name == 'truth' ? 'truth_' : 'cand_'
+    """
+    ${thread_limits(task.cpus)}
+    python3 ${projectDir}/bin/python/prefilter_vcf.py --vcf ${vcf} --bed ${hci_bed} --overlap 1 \\
+        --stable-ids --id-prefix ${id_prefix} --output ${name}.hci.vcf.gz
+    python3 ${projectDir}/bin/python/prefilter_vcf.py --vcf ${vcf} --bed ${target_bed} --overlap 1 \\
+        --stable-ids --id-prefix ${id_prefix} --output ${name}.target.vcf.gz
+    """
+
+    stub:
+    """
+    touch ${name}.hci.vcf.gz ${name}.hci.vcf.gz.tbi ${name}.target.vcf.gz ${name}.target.vcf.gz.tbi
+    """
+}
+
+// `svanalyzer benchmark` on HCI and on the target. maxdist mirrors Truvari's
+// refdist 500, normsizediff 0.3 its pctsize 0.7 and normdist 1.0 its pctseq 0;
+// normshift keeps SVanalyzer's default. SVanalyzer rebuilds <fasta>.fai when it
+// is older than the FASTA, so the index is copied, never linked: the copy is newer,
+// and a rebuild could never write through a link into the reference directory.
+process POSTHOC_SVANALYZER {
+    tag "${name}"
+    label 'process_single'
+
+    input:
+    tuple val(name), path(test_vcfs), path(truth_vcfs)   // <name>.{hci,target}.vcf.gz and truth.*, with indexes
+    tuple path(fasta), path(fai)
+
+    output:
+    tuple val(name), path("${name}.{hci,target}.{distances,report}"), emit: runs
+    path "${name}.{hci,target}.log", emit: logs
+
+    script:
+    """
+    ln -s ${fasta} reference.fasta
+    cp -L ${fai} reference.fasta.fai
+    for region in hci target; do
+        mkdir -p run_\$region
+        ( cd run_\$region && svanalyzer benchmark --ref ../reference.fasta \\
+            --test ../${name}.\$region.vcf.gz --truth ../truth.\$region.vcf.gz \\
+            --maxdist 500 --normshift 1.0 --normsizediff 0.3 --normdist 1.0 --prefix ../${name}.\$region )
+    done
+    """
+
+    stub:
+    """
+    touch ${name}.hci.distances ${name}.hci.report ${name}.target.distances ${name}.target.report \\
+        ${name}.hci.log ${name}.target.log
+    """
+}
+
+// Every HCI-TP to target-FN truth record traced to its HCI partners, per pipeline,
+// and one summary table for the assembly in pipeline order. `files` holds the
+// SVanalyzer runs and the target-restricted VCFs, truth.target.vcf.gz included.
+process POSTHOC_SVANALYZER_ELIGIBILITY {
+    tag "${assembly}"
+    label 'process_single'
+
+    input:
+    val names
+    path files, stageAs: 'runs/*'
+    val assembly
+
+    output:
+    path "svanalyzer_summary.tsv", emit: summary
+    path "*.transitions.tsv"     , emit: transitions
+
+    script:
+    // names are TECHNOLOGY:CALLER; files carry TECHNOLOGY_CALLER
+    def calls = [names].flatten().sort().collect { pipeline ->
+        def name = pipeline.replace(':', '_')
+        """python3 ${projectDir}/bin/python/svanalyzer_eligibility.py --assembly ${assembly} --pipeline "${pipeline.replace(':', ' ')}" \\
+        --hci-prefix runs/${name}.hci --target-prefix runs/${name}.target \\
+        --target-truth runs/truth.target.vcf.gz --target-test runs/${name}.target.vcf.gz \\
+        --normshift 1.0 --normsizediff 0.3 --normdist 1.0 --summary ${name}.summary.tsv --records ${name}.transitions.tsv"""
+    }.join('\n')
+    def summaries = [names].flatten().sort().collect { pipeline -> "${pipeline.replace(':', '_')}.summary.tsv" }
+    """
+    ${thread_limits(task.cpus)}
+    ${calls}
+    head -n 1 ${summaries[0]} > svanalyzer_summary.tsv
+    for f in ${summaries.join(' ')}; do tail -n +2 \$f >> svanalyzer_summary.tsv; done
+    """
+
+    stub:
+    """
+    touch svanalyzer_summary.tsv stub.transitions.tsv
+    """
+}
+
+// Every value the manuscript and its supplementary tables report, for one
+// assembly, from the outputs of the other post-hoc steps and of the statistics,
+// transition-evidence and 0/0-removal steps. The inputs are staged into the
+// published results layout that manuscript_values.py reads.
+process POSTHOC_MANUSCRIPT_VALUES {
+    tag "${assembly}"
+    label 'process_single'
+
+    input:
+    path metrics               , stageAs: 'results/posthoc/*'
+    path posthoc_tables        , stageAs: 'results/posthoc/*'
+    path decomposition         , stageAs: 'results/posthoc/decomposition/*'
+    path stratified            , stageAs: 'results/posthoc/stratified/*'
+    path sensitivity           , stageAs: 'results/posthoc/sensitivity/*'
+    path membership            , stageAs: 'results/posthoc/membership/*'
+    path svanalyzer            , stageAs: 'results/posthoc/svanalyzer/*'
+    path statistics            , stageAs: 'results/statistics/tables/*'
+    path transitions           , stageAs: 'results/target_transition_evidence/tables/*'
+    path simulation_transitions, stageAs: 'results/target_transition_evidence/simulations/tables/*'
+    path homref_counts         , stageAs: 'results/benchmarked_calls/*'
+    val assembly
+
+    output:
+    path "${assembly}.manuscript_numbers.md", emit: numbers
+    path "supplementary_tables"            , emit: tables
+
+    script:
+    """
+    ${thread_limits(task.cpus)}
+    python3 ${projectDir}/bin/python/manuscript_values.py --results results --assembly ${assembly} --outdir .
+    """
+
+    stub:
+    """
+    mkdir supplementary_tables
+    touch ${assembly}.manuscript_numbers.md
+    """
+}

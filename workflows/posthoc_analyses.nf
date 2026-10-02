@@ -19,6 +19,12 @@
                          of the primary losses under --extend and padding
       composition        simulated metrics reweighted to the target's SV mix
       fidelity           how the simulated interval sets differ from the real target
+      inversions         precision with and without candidate inversions
+      membership         truth records admitted by containment and by any overlap, in
+                         the simulated sets and by independent VCF-BED intersection
+      svanalyzer         the real-target benchmarks repeated with a second comparator
+      manuscript values  every number the manuscript and its supplementary tables
+                         report, from all of the above
 
     The scripts in bin/python/ read the published results layout, so each task
     rebuilds the part it needs from its staged inputs (modules/local/posthoc_analyses.nf).
@@ -34,6 +40,12 @@ include {
     POSTHOC_SENSITIVITY
     POSTHOC_COMPOSITION
     POSTHOC_FIDELITY
+    POSTHOC_INVERSION_PRECISION
+    POSTHOC_MEMBERSHIP
+    POSTHOC_SVANALYZER_PREFILTER
+    POSTHOC_SVANALYZER
+    POSTHOC_SVANALYZER_ELIGIBILITY
+    POSTHOC_MANUSCRIPT_VALUES
 } from '../modules/local/posthoc_analyses'
 
 // Where TRUVARI_BENCH publishes a benchmark, relative to --outdir. Mirrors the
@@ -86,6 +98,9 @@ workflow POSTHOC_ANALYSES {
     ch_truth               // channel: [truth vcf, tbi]
     ch_reference           // channel: [fasta, fai]
     ch_target_transitions  // channel: merged target-transition evidence files
+    ch_simulation_transitions // channel: merged simulation transition evidence files
+    ch_statistics_tables   // channel: statistics tables (GATHER_STATISTICS)
+    ch_homref_counts       // channel: per-caller counts of removed 0/0 calls
     assembly               // value: GRCh37 or GRCh38
 
     main:
@@ -107,6 +122,7 @@ workflow POSTHOC_ANALYSES {
     }
 
     ch_hci_bed = ch_targets.filter { name, _bed -> name == hci }.map { _name, bed -> bed }.first()
+    ch_target_only_bed = ch_targets.filter { name, _bed -> name == target }.map { _name, bed -> bed }.first()
     ch_target_beds = ch_targets.filter { name, _bed -> name == target }.map { _name, bed -> bed }
         .combine(ch_targets.filter { name, _bed -> name == 'gene_panel' }.map { _name, bed -> bed })
         .first()
@@ -235,7 +251,94 @@ workflow POSTHOC_ANALYSES {
         channel.value([annotation_labels, annotation_files])
     )
 
+    //
+    // Precision without candidate inversions: the primary real-target FP VCFs
+    //
+    POSTHOC_INVERSION_PRECISION(
+        ch_bench_entries
+            .filter { meta, rel, _file -> is_real(meta) && is_primary(meta) && rel.endsWith('.fp.vcf.gz') }
+            .map { _meta, rel, file -> [rel, file] }
+            .collect(flat: false)
+            .map { entries -> as_tree(entries) },
+        POSTHOC_METRICS.out.metrics,
+        assembly
+    )
+
+    //
+    // Containment against any overlap, counted directly. The truth records are
+    // those an HCI benchmark scored; the truth side is the same for every pipeline,
+    // so the first WGS pipeline in name order is used. Needs the containment
+    // benchmarks, whose Truvari counts the direct count is checked against.
+    //
+    ch_membership = channel.empty()
+    if (params.sensitivity_benchmarks && params.sensitivity_containment) {
+        ch_hci_truth = ch_bench
+            .filter { row -> is_real(row[0]) && is_primary(row[0]) && row[0].target == hci && row[0].technology != 'Illumina_WES' }
+            .toSortedList { a, b -> pipeline_of(a[0]) <=> pipeline_of(b[0]) }
+            .filter { benches -> benches }
+            .map { benches -> [benches[0][3], benches[0][7]] }
+        POSTHOC_MEMBERSHIP(
+            ch_hci_truth,
+            ch_target_only_bed.combine(ch_hci_bed).first(),
+            ch_simulated_beds.flatten().collect(),
+            POSTHOC_METRICS.out.metrics,
+            assembly
+        )
+        ch_membership = POSTHOC_MEMBERSHIP.out.tables
+    }
+
+    //
+    // SVanalyzer on the real targets: the truth and every WGS pipeline's scored
+    // VCF, restricted independently to HCI and to the target
+    //
+    ch_sva_calls = ch_calls.filter { meta, _vcf, _tbi -> meta.technology != 'Illumina_WES' }
+    ch_sva_vcfs = ch_truth.map { vcf, tbi -> ['truth', vcf, tbi] }
+        .mix(ch_sva_calls.map { meta, vcf, tbi -> [pipeline_of(meta).replace(':', '_'), vcf, tbi] })
+    POSTHOC_SVANALYZER_PREFILTER(ch_sva_vcfs, ch_hci_bed.combine(ch_target_only_bed).first())
+    ch_sva_truth = POSTHOC_SVANALYZER_PREFILTER.out.vcfs.filter { name, _vcfs -> name == 'truth' }
+    POSTHOC_SVANALYZER(
+        POSTHOC_SVANALYZER_PREFILTER.out.vcfs
+            .filter { name, _vcfs -> name != 'truth' }
+            .combine(ch_sva_truth)
+            .map { name, test_vcfs, _truth, truth_vcfs -> [name, test_vcfs, truth_vcfs] },
+        ch_reference.first()
+    )
+    POSTHOC_SVANALYZER_ELIGIBILITY(
+        ch_sva_calls.map { meta, _vcf, _tbi -> pipeline_of(meta) }.collect(),
+        POSTHOC_SVANALYZER.out.runs.flatMap { _name, files -> files }
+            .mix(POSTHOC_SVANALYZER_PREFILTER.out.vcfs
+                .flatMap { _name, files -> files }
+                .filter { file -> file.name.endsWith('.target.vcf.gz') })
+            .collect(),
+        assembly
+    )
+
+    //
+    // Every value the manuscript reports, from the outputs above and from the
+    // statistics, transition-evidence and 0/0-removal steps
+    //
+    POSTHOC_MANUSCRIPT_VALUES(
+        POSTHOC_METRICS.out.metrics,
+        POSTHOC_SVTYPE_ACCOUNTING.out.table
+            .mix(POSTHOC_SVTYPE_ACCOUNTING.out.log, POSTHOC_COMPOSITION.out.table, POSTHOC_FIDELITY.out.tables.flatten(),
+                POSTHOC_INVERSION_PRECISION.out.table)
+            .collect(),
+        POSTHOC_DECOMPOSITION.out.decomposition
+            .mix(POSTHOC_DECOMPOSITION.out.strata, POSTHOC_DECOMPOSITION.out.uncertainty)
+            .collect(),
+        POSTHOC_STRATIFY.out.stratified.collect(),
+        params.sensitivity_benchmarks ? POSTHOC_SENSITIVITY.out.tables.flatten().collect() : channel.value([]),
+        ch_membership.flatten().collect().ifEmpty([]),
+        POSTHOC_SVANALYZER_ELIGIBILITY.out.summary,
+        ch_statistics_tables.flatten().collect().ifEmpty([]),
+        ch_target_transitions.flatten().collect().ifEmpty([]),
+        ch_simulation_transitions.flatten().collect().ifEmpty([]),
+        ch_homref_counts.collect().ifEmpty([]),
+        assembly
+    )
+
     emit:
     metrics     = POSTHOC_METRICS.out.metrics
     check       = POSTHOC_STRATIFICATION_CHECK.out.report
+    manuscript  = POSTHOC_MANUSCRIPT_VALUES.out.numbers
 }

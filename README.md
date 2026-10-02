@@ -290,14 +290,25 @@ tasks after the benchmarks and publish under `<outdir>/posthoc/`:
   padding;
 - composition standardisation of the simulated metrics;
 - simulation fidelity (GIAB v3.3 stratifications by default;
-  `--posthoc_segdups` and `--posthoc_lowmappability` override them).
+  `--posthoc_segdups` and `--posthoc_lowmappability` override them);
+- precision with and without candidate inversions;
+- truth records admitted by containment and by any overlap, counted directly in
+  every simulated set and by independent VCF-BED intersection (`membership/`;
+  needs the containment benchmarks of `--sensitivity_benchmarks`);
+- the real-target benchmarks repeated with SVanalyzer as a second comparator
+  (`svanalyzer/`; bioconda image, `--svanalyzer_container` overrides it);
+- every value the manuscript and its supplementary tables report
+  (`manuscript/<assembly>.manuscript_numbers.md`, and one TSV per supplementary
+  table in `manuscript/supplementary_tables/`, with the rounding they are printed
+  with).
 
 They need a truth set and `--simulate_targets true`; with the sensitivity
-benchmarks they also need `--generate_transition_evidence true`.
+benchmarks they also need `--generate_transition_evidence true`. The manuscript
+values also read the statistics tables (`--gather_statistics`) and the
+transition evidence; sections whose inputs were not produced are skipped.
 
-The SVanalyzer second-comparator check is deliberately not part of the pipeline.
-Run it on a finished run with `bin/run_svanalyzer_posthoc.sh <run_root> <assembly>`
-(`SVANALYZER_SIF` built from `containers/Singularity.svanalyzer`).
+`bin/run_svanalyzer_posthoc.sh <run_root> <assembly>` runs the same SVanalyzer
+check on a finished run made without it (`SVANALYZER_SIF` set to a local image).
 
 GRCh38 BAMs are prepared with `preparation/build_grch38_analysis_bams.sh`, which
 restricts them to the contigs of the analysis reference and filters nothing

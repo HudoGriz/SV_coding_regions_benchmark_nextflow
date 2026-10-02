@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# Second-comparator check, outside the pipeline:
+# Second-comparator check on a finished run made without the pipeline's own
+# post-hoc SVanalyzer step (POSTHOC_SVANALYZER, under --posthoc_analyses):
 #
 #   bin/run_svanalyzer_posthoc.sh <run_root> <assembly> [TECH:CALLER ...]
 #

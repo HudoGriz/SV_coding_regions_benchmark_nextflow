@@ -2,10 +2,12 @@
 
 A Nextflow DSL2 pipeline for systematic benchmarking of structural variant (SV) detection across multiple sequencing technologies and genomic interval categories using the Genome in a Bottle (GIAB) HG002 truth set.
 
-This pipeline accompanies the manuscript:
-> **How Diagnostic Target Selection Alters Structural Variant Benchmarking**
+Version 2.0.0. This release produces every value reported in the manuscript:
+> **How Fragmented Interval Subsetting Alters Structural Variant Benchmarking**
 >
-> Preprint: [10.21203/rs.3.rs-9179453/v1](https://doi.org/10.21203/rs.3.rs-9179453/v1)
+> Preprint of the submitted version: [10.21203/rs.3.rs-9179453/v1](https://doi.org/10.21203/rs.3.rs-9179453/v1)
+
+Changes between releases are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Overview
 
@@ -46,8 +48,22 @@ PREPARE_REFERENCES ─> SV_CALLING ─> BENCHMARKING ─┬─> SIMULATE_AND_BEN
 
 ## Requirements
 
-- Nextflow >= 23.04.0
-- Container engine: Singularity/Apptainer (recommended) or Docker
+- **Nextflow** 25.04 or later on the host (`manifest.nextflowVersion`; the study
+  was run with 25.10.0).
+- **Apptainer or Singularity.** The Truvari and analysis images are published as
+  signed `library://` images on Sylabs Cloud and are pulled on first use. A fresh
+  Apptainer installation has no Sylabs remote; add it once with
+  `apptainer remote add --no-login SylabsCloud cloud.sylabs.io` and
+  `apptainer remote use SylabsCloud`. The SV callers and SVanalyzer come from
+  quay.io and the Galaxy depot and need no setup. Docker, Podman and Charliecloud
+  can run SV calling only (see *Container engine* below).
+- **Inputs.** `preparation/prepare.sh` downloads the GIAB data, references,
+  truth sets and annotations (about 500 GB per build). The gene-panel BEDs
+  (`data/Paediatric_disorders.HG002_SVs_Tier1.GRCh3{7,8}.bed`, 3,886 genes,
+  intersected with HCI) and the Illumina WES capture targets
+  (`data/agilent_sureselect_human_all_exon_v5_b37_targets.bed`, Agilent SureSelect
+  Human All Exon V5) ship with the repository; the preparation scripts copy them
+  into the reference directory.
 
 ## Quick Start
 

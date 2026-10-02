@@ -8,6 +8,9 @@
 
 include { MANTA_GERMLINE as MANTA_WES } from '../modules/nf-core/manta/germline/main'
 include { MANTA_GERMLINE as MANTA_WGS } from '../modules/nf-core/manta/germline/main'
+include { DELLY_CALL } from '../modules/nf-core/delly/call/main'
+include { DELLY_CALL as DELLY_CALL_WES } from '../modules/nf-core/delly/call/main'
+include { DELLY_TARGET_EXCLUDE } from '../modules/local/delly_target_exclude'
 include { CUTESV as CUTESV_PACBIO } from '../modules/nf-core/cutesv/main'
 include { CUTESV as CUTESV_ONT } from '../modules/nf-core/cutesv/main'
 include { PBSV_DISCOVER } from '../modules/nf-core/pbsv/discover/main'
@@ -118,6 +121,33 @@ workflow SV_CALLING {
         ch_all_vcfs = ch_all_vcfs.mix(
             MANTA_WES.out.diploid_sv_vcf.join(MANTA_WES.out.diploid_sv_vcf_tbi)
         )
+
+        //
+        // Illumina WES - Delly. Delly has no exome mode; its authors advise keeping
+        // calls whose breakpoints lie in targeted sequence, so everything outside the
+        // capture targets is added to the exclude template (DELLY_TARGET_EXCLUDE).
+        //
+        if (!params.skip_delly && params.wes_sequencing_targets) {
+            DELLY_TARGET_EXCLUDE(
+                Channel.value([[id: 'Illumina_WES-Delly'], file(params.wes_sequencing_targets, checkIfExists: true)]),
+                ch_fasta_fai,
+                params.delly_exclude ? file(params.delly_exclude, checkIfExists: true) : []
+            )
+            DELLY_CALL_WES(
+                ch_wes_bam_indexed
+                    .combine(DELLY_TARGET_EXCLUDE.out.exclude.map { _meta, exclude -> exclude })
+                    .map { meta, bam, bai, exclude ->
+                        [[id: meta.id, technology: 'Illumina_WES', tool: 'Delly'], bam, bai, [], [], exclude]
+                    },
+                ch_fasta.map { f -> [[id: 'fasta'], f] },
+                ch_fasta_fai.map { f -> [[id: 'fai'], f] },
+                'vcf'
+            )
+
+            ch_all_vcfs = ch_all_vcfs.mix(
+                DELLY_CALL_WES.out.bcf.join(DELLY_CALL_WES.out.csi)
+            )
+        }
     }
     
     //
@@ -164,6 +194,25 @@ workflow SV_CALLING {
         ch_all_vcfs = ch_all_vcfs.mix(
             MANTA_WGS.out.diploid_sv_vcf.join(MANTA_WGS.out.diploid_sv_vcf_tbi)
         )
+
+        //
+        // Illumina WGS - Delly, the second short-read caller.
+        //
+        if (!params.skip_delly) {
+            def delly_exclude = params.delly_exclude ? file(params.delly_exclude, checkIfExists: true) : []
+            DELLY_CALL(
+                ch_illumina_wgs_bam.map { meta, bam, bai, _target_bed, _target_tbi ->
+                    [[id: meta.id, technology: meta.technology, tool: 'Delly'], bam, bai, [], [], delly_exclude]
+                },
+                ch_fasta.map { f -> [[id: 'fasta'], f] },
+                ch_fasta_fai.map { f -> [[id: 'fai'], f] },
+                'vcf'
+            )
+
+            ch_all_vcfs = ch_all_vcfs.mix(
+                DELLY_CALL.out.bcf.join(DELLY_CALL.out.csi)
+            )
+        }
     }
     
     //

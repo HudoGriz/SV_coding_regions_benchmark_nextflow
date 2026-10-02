@@ -24,6 +24,9 @@ include { BENCHMARKING } from './workflows/benchmarking'
 include { SIMULATE_AND_BENCHMARK } from './workflows/simulate_and_benchmark'
 include { ANALYSIS_AND_PLOTS } from './workflows/analysis_and_plots'
 include { TARGET_TRANSITION_EVIDENCE } from './workflows/target_transition_evidence'
+include { SENSITIVITY_BENCHMARKS } from './workflows/sensitivity_benchmarks'
+include { EXCLUDE_HOMREF_CALLS } from './modules/local/exclude_homref_calls'
+include { POSTHOC_ANALYSES } from './workflows/posthoc_analyses'
 
 /*
 ========================================================================================
@@ -63,6 +66,9 @@ workflow {
           --outdir               Output directory (default: results)
           --run_name             Run name (default: benchmarking_run)
           --tandem_repeats       Tandem repeats BED file (for Sniffles)
+          --skip_delly           Skip Delly on Illumina WGS and WES (default: false)
+          --delly_exclude        Delly exclude template (telomeres, centromeres)
+          --exclude_homref_calls Drop calls genotyped 0/0 before benchmarking (default: true)
           
         Simulation Options:
           --simulate_targets     Enable target region simulation (default: false)
@@ -71,8 +77,13 @@ workflow {
         Analysis Options:
           --gather_statistics    Generate statistics and plots (default: false)
           --generate_transition_evidence  Audit target-boundary transitions and create figures
-        
+          --sensitivity_benchmarks        Re-score the real targets under alternative settings
+          --posthoc_analyses     Decomposition, post-matching stratification, bootstrap,
+                                 sensitivity audits and simulation fidelity (default: false)
+
         Profiles:
+          study                  Every analysis of the study: 500 simulated sets, statistics,
+                                 transition evidence, sensitivity benchmarks, post-hoc analyses
           test_nfcore            Run with nf-core test data
           test                   Run with minimal test data
           docker                 Use Docker containers
@@ -107,8 +118,12 @@ workflow {
     
     // Log which technologies are being analyzed
     def technologies = []
-    if (params.illumina_wes_bam) technologies << "Illumina WES (Manta)"
-    if (params.illumina_wgs_bam) technologies << "Illumina WGS (Manta)"
+    if (params.illumina_wes_bam) {
+        technologies << (params.skip_delly || !params.wes_sequencing_targets ? "Illumina WES (Manta)" : "Illumina WES (Manta, Delly)")
+    }
+    if (params.illumina_wgs_bam) {
+        technologies << (params.skip_delly ? "Illumina WGS (Manta only - Delly skipped)" : "Illumina WGS (Manta, Delly)")
+    }
     if (params.pacbio_bam) {
         if (params.skip_pbsv) {
             technologies << "PacBio (CuteSV only - PBSV skipped)"
@@ -151,6 +166,26 @@ workflow {
         ch_fasta_fai,
         ch_tandem_repeats
     )
+
+    //
+    // Calls genotyped homozygous reference (0/0) are the caller stating that the
+    // sample does not carry the variant, and the truth sets count only records
+    // that carry an ALT allele, so these calls are dropped before any benchmark.
+    // A caller with none keeps its original VCF, so its benchmarks are unchanged
+    // and a resumed run reuses them. Only the benchmarking subworkflows read these
+    // calls, and all of them need a truth set, so without one the step is skipped.
+    //
+    ch_calls = SV_CALLING.out.vcfs
+    ch_homref_counts = Channel.empty()
+    if (params.exclude_homref_calls && params.benchmark_vcf) {
+        EXCLUDE_HOMREF_CALLS(SV_CALLING.out.vcfs)
+        ch_homref_counts = EXCLUDE_HOMREF_CALLS.out.counts
+        ch_calls = SV_CALLING.out.vcfs
+            .join(EXCLUDE_HOMREF_CALLS.out.vcf)
+            .map { meta, vcf, tbi, filtered_vcf, filtered_tbi, removed ->
+                removed.toInteger() > 0 ? [meta, filtered_vcf, filtered_tbi] : [meta, vcf, tbi]
+            }
+    }
     
     //
     // SUBWORKFLOW: Benchmarking
@@ -158,7 +193,7 @@ workflow {
     ch_truvari_results = Channel.empty()
     if (params.benchmark_vcf && !params.skip_benchmarking) {
         BENCHMARKING(
-            SV_CALLING.out.vcfs,
+            ch_calls,
             ch_benchmark_vcf,
             ch_benchmark_vcf_tbi,
             ch_targets,
@@ -170,6 +205,22 @@ workflow {
         log.info "Skipping Truvari benchmarking (benchmark_vcf=${params.benchmark_vcf}, skip_benchmarking=${params.skip_benchmarking})"
     }
     
+    //
+    // SUBWORKFLOW: Sensitivity benchmarks on the real targets (optional)
+    //
+    ch_sensitivity_bench = Channel.empty()
+    if (params.sensitivity_benchmarks && params.benchmark_vcf && !params.skip_benchmarking) {
+        SENSITIVITY_BENCHMARKS(
+            ch_calls,
+            ch_targets,
+            ch_benchmark_vcf,
+            ch_benchmark_vcf_tbi,
+            ch_fasta,
+            ch_fasta_fai
+        )
+        ch_sensitivity_bench = SENSITIVITY_BENCHMARKS.out.bench_files
+    }
+
     //
     // SUBWORKFLOW: Simulation and benchmarking (optional)
     //
@@ -203,7 +254,7 @@ workflow {
             ch_fasta_fai,
             ch_benchmark_vcf,
             ch_benchmark_vcf_tbi,
-            SV_CALLING.out.vcfs,
+            ch_calls,
             params.num_simulations,
             ch_wes_utr,
             ch_high_confidence
@@ -245,6 +296,34 @@ workflow {
         log.info "Target-transition evidence tables and figures generated"
     }
     
+    //
+    // SUBWORKFLOW: Post-hoc analyses (optional). They compare the real targets with
+    // the simulated interval sets, so they need a truth set and the simulations.
+    //
+    if (params.posthoc_analyses) {
+        if (!params.benchmark_vcf || params.skip_benchmarking || !params.simulate_targets) {
+            error "--posthoc_analyses needs --benchmark_vcf, benchmarking enabled and --simulate_targets true"
+        }
+        if (params.sensitivity_benchmarks && !params.generate_transition_evidence) {
+            error "--posthoc_analyses with --sensitivity_benchmarks needs --generate_transition_evidence true"
+        }
+        POSTHOC_ANALYSES(
+            BENCHMARKING.out.bench_files
+                .mix(SIMULATE_AND_BENCHMARK.out.bench_files)
+                .mix(ch_sensitivity_bench),
+            ch_calls,
+            SIMULATE_AND_BENCHMARK.out.simulated_beds,
+            ch_targets,
+            ch_benchmark_vcf.combine(ch_benchmark_vcf_tbi),
+            ch_fasta.combine(ch_fasta_fai),
+            params.generate_transition_evidence ? TARGET_TRANSITION_EVIDENCE.out.evidence : Channel.empty(),
+            params.generate_transition_evidence ? TARGET_TRANSITION_EVIDENCE.out.simulation_evidence : Channel.empty(),
+            params.gather_statistics ? ANALYSIS_AND_PLOTS.out.tables : Channel.empty(),
+            ch_homref_counts,
+            params.reference_assembly
+        )
+    }
+
     /*
     ========================================================================================
         WORKFLOW COMPLETION HANDLER

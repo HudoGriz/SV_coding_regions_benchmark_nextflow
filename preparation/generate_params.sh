@@ -118,15 +118,21 @@ if [[ "${GENOME}" == "GRCh37" ]]; then
     GENE_PANEL=$(find_file_with_fallback "${REFS}/Paediatric_disorders.HG002_SVs_Tier1.GRCh37.bed" "Paediatric_disorders.HG002_SVs_Tier1.GRCh37.bed")
     WES_UTR=$(find_file "${REFS}/exome_utr_gtf.HG002_SVs_Tier1.bed")
     TANDEM_REPEATS=$(find_file "${REFS}/human_hs37d5.trf.bed")
+    DELLY_EXCLUDE=$(find_file "${REFS}/delly_human.hg19.excl.tsv")
     RUN_NAME="GRCh37"
 else
     # GRCh38
     FASTA=$(find_file "${REFS}/human_GRCh38_no_alt_analysis_set.fasta")
     ILLUMINA_WES_BAM=""  # No WES available for GRCh38
     WES_SEQ_TARGETS=""
-    ILLUMINA_WGS_BAM=$(find_file "${DATA_DIR}/filtered_bams/HG002.Illumina.60.filtered.strict.bam")
-    PACBIO_BAM=$(find_file "${DATA_DIR}/filtered_bams/HG002.PacBio.filtered.header.strict.pacbiospec.bam")
-    ONT_BAM=$(find_file "${DATA_DIR}/filtered_bams/HG002.ONT.filtered.header.strict.longread.bam")
+    # BAMs restricted to the analysis contigs, with SA entries naming dropped
+    # contigs removed, by build_grch38_analysis_bams.sh. A technology without
+    # one (ONT, whose header already matches the reference) falls back to the
+    # BAM as distributed. The intermediate analysis_contigs.bam files and the
+    # older strict-filter BAMs in filtered_bams/ are deliberately never picked up.
+    ILLUMINA_WGS_BAM=$(find_file "${DATA_DIR}/analysis_bams/HG002.Illumina.GRCh38.analysis_contigs.sa_filtered.bam")
+    PACBIO_BAM=$(find_file "${DATA_DIR}/analysis_bams/HG002.PacBio.GRCh38.analysis_contigs.sa_filtered.bam")
+    ONT_BAM=$(find_file "${DATA_DIR}/analysis_bams/HG002.ONT.GRCh38.analysis_contigs.sa_filtered.bam")
     if [[ -z "${ILLUMINA_WGS_BAM}" ]]; then
         ILLUMINA_WGS_BAM=$(find_file "${DATA_DIR}/Illumina_wgs/bam_GRCh38/HG002.GRCh38.60x.1.bam")
     fi
@@ -141,6 +147,7 @@ else
     GENE_PANEL=$(find_file_with_fallback "${REFS}/Paediatric_disorders.HG002_SVs_Tier1.GRCh38.bed" "Paediatric_disorders.HG002_SVs_Tier1.GRCh38.bed")
     WES_UTR=$(find_file "${REFS}/exome_utr_gtf.GRCh38_HG002-T2TQ100-V1.0_stvar.bed")
     TANDEM_REPEATS=$(find_file "${REFS}/human_GRCh38_no_alt_analysis_set.trf.bed")
+    DELLY_EXCLUDE=$(find_file "${REFS}/delly_human.hg38.excl.tsv")
     RUN_NAME="GRCh38"
 fi
 
@@ -230,6 +237,11 @@ YAML_HEADER
     yaml_path "tandem_repeats" "${TANDEM_REPEATS}"
     echo ""
 
+    # Delly exclude template
+    echo "# Delly exclude template (telomeres, centromeres)"
+    yaml_path "delly_exclude" "${DELLY_EXCLUDE}"
+    echo ""
+
     # Truvari parameters
     echo "# Truvari benchmarking parameters"
     yaml_value "truvari_refdist"  "500"
@@ -245,11 +257,14 @@ YAML_HEADER
     yaml_value "truvari_wes_pctseq"   "0"
     echo ""
 
-    # Resource limits
-    echo "# Resource limits (adjust to your cluster)"
-    yaml_value "max_cpus"   "48"
-    yaml_value "max_memory"  "'128.GB'"
-    yaml_value "max_time"    "'48.h'"
+    # Resource limits are not written: this script cannot know the machine or
+    # cluster the pipeline will run on, so the pipeline defaults apply unless the
+    # user sets them here or on the command line.
+    echo "# Resource limits: the pipeline defaults (nextflow.config) apply unless set here."
+    echo "# Set them to what your execution environment provides, for example:"
+    echo "# max_cpus: 16"
+    echo "# max_memory: '64.GB'"
+    echo "# max_time: '48.h'"
     echo ""
 
     # Simulation

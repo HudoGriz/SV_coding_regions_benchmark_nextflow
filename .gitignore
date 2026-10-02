@@ -7,7 +7,12 @@ benchmarking_run/
 test_results/
 test_results_*/
 
-data/
+# Local input data stays out of git, except the study's target BEDs, which a fresh
+# clone needs and which the preparation scripts copy into the reference directory.
+/data/*
+!/data/Paediatric_disorders.HG002_SVs_Tier1.GRCh37.bed
+!/data/Paediatric_disorders.HG002_SVs_Tier1.GRCh38.bed
+!/data/agilent_sureselect_human_all_exon_v5_b37_targets.bed
 notes.*
 supplementary/
 
@@ -62,3 +67,6 @@ Thumbs.db
 *.fa.fai
 *.sif
 containers/*.sif
+
+# Site- and machine-specific launchers (Slurm submission, cluster config wrappers); never committed
+/local/

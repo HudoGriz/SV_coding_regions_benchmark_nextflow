@@ -124,5 +124,12 @@ workflow SIMULATE_AND_BENCHMARK {
     emit:
     simulated_beds = SIMULATE_TARGETS.out.simulated_beds
     truvari_results = TRUVARI_BENCH.out.summary
+    // channel: [meta, summary, params.json, tp-base, tbi, tp-comp, tbi, fn, tbi, fp, tbi], for the post-hoc analyses
+    bench_files = TRUVARI_BENCH.out.summary
+        .join(TRUVARI_BENCH.out.params)
+        .join(TRUVARI_BENCH.out.tp_base_vcf).join(TRUVARI_BENCH.out.tp_base_tbi)
+        .join(TRUVARI_BENCH.out.tp_comp_vcf).join(TRUVARI_BENCH.out.tp_comp_tbi)
+        .join(TRUVARI_BENCH.out.fn_vcf).join(TRUVARI_BENCH.out.fn_tbi)
+        .join(TRUVARI_BENCH.out.fp_vcf).join(TRUVARI_BENCH.out.fp_tbi)
     transition_evidence_input = ch_transition_evidence_input
 }

@@ -1,6 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
+# Container runtime: Apptainer, or Singularity where only that name is installed.
+container_engine="$(command -v apptainer || command -v singularity || true)"
+[ -n "${container_engine}" ] || { echo "ERROR: neither apptainer nor singularity is on PATH" >&2; exit 1; }
+
 # =============================================================================
 # Download and prepare GRCh38 data for SV benchmarking
 # =============================================================================
@@ -29,7 +33,7 @@ set -euo pipefail
 #       Illumina_wgs/bam_GRCh38/   Illumina WGS BAMs + indices
 #       Pacbio/bam_GRCh38/          PacBio HiFi BAM + index
 #       ONT/bam_GRCh38/             ONT BAM + index
-#       filtered_bams/              Filtered BAMs + indices (GRCh38)
+#       analysis_bams/              BAMs restricted to the analysis contigs + manifests
 #       references/                  Reference genome, truth sets, BED files
 #   <singularity_images_directory>/
 #     *.sif                    Singularity container images
@@ -92,12 +96,12 @@ ensure_singularity_images() {
   echo "--- Ensuring Singularity images ---"
   mkdir -p "${singularity_dir}"
   cd "${singularity_dir}"
-  [ -f samtools_latest.sif ] || singularity pull --force samtools_latest.sif docker://quay.io/biocontainers/samtools:1.19--h50ea8bc_0
-  [ -f bedtools_latest.sif ] || singularity pull --force bedtools_latest.sif docker://quay.io/biocontainers/bedtools:2.31.1--h13024bc_3
+  [ -f samtools_latest.sif ] || "${container_engine}" pull --force samtools_latest.sif docker://quay.io/biocontainers/samtools:1.19--h50ea8bc_0
+  [ -f bedtools_latest.sif ] || "${container_engine}" pull --force bedtools_latest.sif docker://quay.io/biocontainers/bedtools:2.31.1--h13024bc_3
   # The same combined Python/R image the benchmarking pipeline runs, so target
   # BEDs are built under the R environment that later analyses use. It supersedes
   # the old r-env:4-4-1 image, which carried the same R 4.4.1 and packages.
-  [ -f "${ANALYSIS_IMAGE_NAME}" ] || singularity pull --force "${ANALYSIS_IMAGE_NAME}" "${ANALYSIS_IMAGE_URI}"
+  [ -f "${ANALYSIS_IMAGE_NAME}" ] || "${container_engine}" pull --force "${ANALYSIS_IMAGE_NAME}" "${ANALYSIS_IMAGE_URI}"
 }
 
 download_phase() {
@@ -144,6 +148,11 @@ download_phase() {
   echo "--- Downloading GRCh38 tandem repeat annotations ---"
   wget -c https://raw.githubusercontent.com/PacificBiosciences/pbsv/refs/heads/master/annotations/human_GRCh38_no_alt_analysis_set.trf.bed
 
+  # Delly exclude template (telomeres, centromeres), pinned to the Delly
+  # release in the pipeline's container so the two cannot drift apart.
+  echo "--- Downloading Delly exclude template (GRCh38) ---"
+  wget -c -O delly_human.hg38.excl.tsv https://raw.githubusercontent.com/dellytools/delly/v1.7.3/excludeTemplates/human.hg38.excl.tsv
+
   # GENCODE GTF for coding regions. Pinned to release_49; the latest_release
   # path is a moving target that 404s for v49 once GENCODE publishes v50.
   echo "--- Downloading GENCODE v49 GTF ---"
@@ -175,97 +184,30 @@ postprocess_phase() {
   fi
 
   if [ ! -f "${references_dir}/human_GRCh38_no_alt_analysis_set.fasta.fai" ]; then
-    singularity exec \
+    "${container_engine}" exec \
       "${singularity_dir}/samtools_latest.sif" \
       samtools faidx "${references_dir}/human_GRCh38_no_alt_analysis_set.fasta"
   fi
 
   if [ ! -f "${references_dir}/GRCh38_HG002-T2TQ100-V1.0_stvar.vcf.gz.tbi" ]; then
-    singularity exec \
+    "${container_engine}" exec \
       "${singularity_dir}/samtools_latest.sif" \
       tabix -p vcf "${references_dir}/GRCh38_HG002-T2TQ100-V1.0_stvar.vcf.gz"
   fi
 
-# ---- BAM filtering (GRCh38 only, independent of GRCh37 workflow) ----
-echo "--- Filtering GRCh38 BAMs ---"
-
-SAMTOOLS_IMAGE="${singularity_dir}/samtools_latest.sif"
-REFERENCE="${references_dir}/human_GRCh38_no_alt_analysis_set.fasta"
-filtered_dir="${data_dir}/filtered_bams"
-mkdir -p "${filtered_dir}"
-
-CHR_LIST=$(awk '{print $1}' "${REFERENCE}.fai" | tr '\n' ' ')
-
-filter_bam_with_header() {
-  local input_bam="$1"
-  local output_bam="$2"
-  local threads="${3:-4}"
-
-  echo "Filtering paired-end BAM: ${input_bam}"
-
-  (
-    singularity exec "${SAMTOOLS_IMAGE}" samtools view -H "${input_bam}" | grep -v "^@SQ"
-    for chr in ${CHR_LIST}; do
-      singularity exec "${SAMTOOLS_IMAGE}" samtools view -H "${input_bam}" | grep "^@SQ" | grep -w "SN:${chr}"
-    done
-  ) > "${output_bam}.header.sam"
-
-  singularity exec "${SAMTOOLS_IMAGE}" samtools view -@ "${threads}" -F 3852 -f 2 "${input_bam}" ${CHR_LIST} | \
-    cat "${output_bam}.header.sam" - | \
-    singularity exec "${SAMTOOLS_IMAGE}" samtools view -b -@ "${threads}" -o "${output_bam}"
-
-  rm -f "${output_bam}.header.sam"
-  singularity exec "${SAMTOOLS_IMAGE}" samtools index -@ "${threads}" "${output_bam}"
-}
-
-filter_bam_pacbio() {
-  local input_bam="$1"
-  local output_bam="$2"
-  local threads="${3:-4}"
-
-  echo "Filtering long-read BAM: ${input_bam}"
-
-  (
-    singularity exec "${SAMTOOLS_IMAGE}" samtools view -H "${input_bam}" | grep -v "^@SQ"
-    for chr in ${CHR_LIST}; do
-      singularity exec "${SAMTOOLS_IMAGE}" samtools view -H "${input_bam}" | grep "^@SQ" | grep -w "SN:${chr}"
-    done
-  ) > "${output_bam}.header.sam"
-
-  singularity exec "${SAMTOOLS_IMAGE}" samtools view -@ "${threads}" -F 2308 -q 1 "${input_bam}" ${CHR_LIST} | \
-    cat "${output_bam}.header.sam" - | \
-    singularity exec "${SAMTOOLS_IMAGE}" samtools view -b -@ "${threads}" -o "${output_bam}"
-
-  rm -f "${output_bam}.header.sam"
-  singularity exec "${SAMTOOLS_IMAGE}" samtools index -@ "${threads}" "${output_bam}"
-}
-
-illumina_raw_bam="${data_dir}/Illumina_wgs/bam_GRCh38/HG002.GRCh38.60x.1.bam"
-pacbio_raw_bam="${data_dir}/Pacbio/bam_GRCh38/HG002_PacBio-HiFi-Revio_20231031_48x_GRCh38-GIABv3.bam"
-ont_raw_bam="${data_dir}/ONT/bam_GRCh38/HG002_GRCh38_ONT-UL_UCSC_20200508.phased.bam"
-
-illumina_filtered_bam="${filtered_dir}/HG002.Illumina.60.filtered.strict.bam"
-pacbio_filtered_bam="${filtered_dir}/HG002.PacBio.filtered.header.strict.pacbiospec.bam"
-ont_filtered_bam="${filtered_dir}/HG002.ONT.filtered.header.strict.longread.bam"
-
-filter_bam_with_header \
-  "${illumina_raw_bam}" \
-  "${illumina_filtered_bam}" \
-  30
-
-filter_bam_pacbio \
-  "${pacbio_raw_bam}" \
-  "${pacbio_filtered_bam}" \
-  30
-
-filter_bam_pacbio \
-  "${ont_raw_bam}" \
-  "${ont_filtered_bam}" \
-  30
+# ---- Restrict BAMs to the analysis contigs (GRCh38 only) ----
+# The Illumina and PacBio BAMs carry decoy and HLA contigs that the no-alt
+# analysis reference lacks. Only those contigs, and the SA entries that point at
+# them, are removed; no read is filtered on its flags or mapping quality. See
+# build_grch38_analysis_bams.sh, which skips any stage already built.
+echo "--- Restricting GRCh38 BAMs to the analysis contigs ---"
+for tech in illumina pacbio ont; do
+  bash "${SCRIPT_DIR}/build_grch38_analysis_bams.sh" "${project_dir}" "${singularity_dir}" --only "${tech}" --threads "${PREP_THREADS:-$(getconf _NPROCESSORS_ONLN)}"
+done
 
 # Create exome+UTR BED file (no --strip-chr: GRCh38 uses chr1,chr2,... natively)
 echo "--- Creating exome+UTR BED file ---"
-singularity exec \
+"${container_engine}" exec \
   -B "${project_dir}" \
   "${singularity_dir}/${ANALYSIS_IMAGE_NAME}" \
   Rscript "${SCRIPT_DIR}/create_gencode_target_bed.R" \
@@ -274,7 +216,7 @@ singularity exec \
 
 # Intersect exome+UTR with SV truth set benchmark regions
 echo "--- Intersecting exome+UTR with truth set ---"
-singularity exec \
+"${container_engine}" exec \
   -B "${project_dir}" \
   "${singularity_dir}/bedtools_latest.sif" \
   bedtools intersect \

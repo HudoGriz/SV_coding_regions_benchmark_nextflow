@@ -19,7 +19,7 @@ def row_key(row, prefix):
     return (
         row[f"{prefix}_chrom"], int(row[f"{prefix}_pos"]), row[f"{prefix}_id"],
         row[f"{prefix}_svtype"], int(row[f"{prefix}_svlen"]),
-        row[f"{prefix}_allele_digest"],
+        row[f"{prefix}_allele_digest"], row[f"{prefix}_genotype"],
     )
 
 

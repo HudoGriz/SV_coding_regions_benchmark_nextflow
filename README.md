@@ -2,10 +2,12 @@
 
 A Nextflow DSL2 pipeline for systematic benchmarking of structural variant (SV) detection across multiple sequencing technologies and genomic interval categories using the Genome in a Bottle (GIAB) HG002 truth set.
 
-This pipeline accompanies the manuscript:
-> **How Diagnostic Target Selection Alters Structural Variant Benchmarking**
+Version 2.0.0. This release produces every value reported in the manuscript:
+> **How Fragmented Interval Subsetting Alters Structural Variant Benchmarking**
 >
-> Preprint: [10.21203/rs.3.rs-9179453/v1](https://doi.org/10.21203/rs.3.rs-9179453/v1)
+> Preprint of the submitted version: [10.21203/rs.3.rs-9179453/v1](https://doi.org/10.21203/rs.3.rs-9179453/v1)
+
+Changes between releases are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Overview
 
@@ -15,6 +17,8 @@ The pipeline evaluates SV detection performance across four sequencing platforms
 
 ```
 PREPARE_REFERENCES ─> SV_CALLING ─> BENCHMARKING ─┬─> SIMULATE_AND_BENCHMARK (optional)
+                                                   ├─> SENSITIVITY_BENCHMARKS (optional)
+                                                   ├─> TARGET_TRANSITION_EVIDENCE (optional)
                                                    └─> ANALYSIS_AND_PLOTS (optional)
 ```
 
@@ -22,14 +26,15 @@ PREPARE_REFERENCES ─> SV_CALLING ─> BENCHMARKING ─┬─> SIMULATE_AND_BEN
 2. **SV Calling** -- Call structural variants with technology-appropriate callers
 3. **Benchmarking** -- Compare calls against truth set using Truvari across all target intervals
 4. **Simulation** -- Generate 500 random exon-like interval sets and benchmark against them
-5. **Analysis** -- Compute statistics, percentile rankings, KDE outlier analysis, record-level target-transition evidence, and publication plots
+5. **Sensitivity** -- Re-score the real targets with one setting changed at a time: matching thresholds, full containment, candidate-only `--extend`, and symmetric padding
+6. **Analysis** -- Compute statistics, percentile rankings, KDE outlier analysis, record-level target-transition evidence, and publication plots
 
 ### Supported Technologies and Callers
 
 | Technology | SV Callers | Notes |
 |-----------|-----------|-------|
-| Illumina WES | Manta | Uses `--exome` flag; requires capture target BED |
-| Illumina WGS | Manta | |
+| Illumina WES | Manta, Delly | Manta uses `--exome` with the capture BED as call regions; Delly excludes everything outside the capture targets (it has no exome mode) |
+| Illumina WGS | Manta, Delly | Delly (v1.7.3) runs with its exclude template; skip with `--skip_delly` |
 | PacBio HiFi | CuteSV, Pbsv | Pbsv can be skipped with `--skip_pbsv` |
 | ONT | CuteSV, Sniffles | Sniffles supports tandem repeat annotation |
 
@@ -43,8 +48,22 @@ PREPARE_REFERENCES ─> SV_CALLING ─> BENCHMARKING ─┬─> SIMULATE_AND_BEN
 
 ## Requirements
 
-- Nextflow >= 23.04.0
-- Container engine: Singularity/Apptainer (recommended) or Docker
+- **Nextflow** 25.04 or later on the host (`manifest.nextflowVersion`; the study
+  was run with 25.10.0).
+- **Apptainer or Singularity.** The Truvari and analysis images are published as
+  signed `library://` images on Sylabs Cloud and are pulled on first use. A fresh
+  Apptainer installation has no Sylabs remote; add it once with
+  `apptainer remote add --no-login SylabsCloud cloud.sylabs.io` and
+  `apptainer remote use SylabsCloud`. The SV callers and SVanalyzer come from
+  quay.io and the Galaxy depot and need no setup. Docker, Podman and Charliecloud
+  can run SV calling only (see *Container engine* below).
+- **Inputs.** `preparation/prepare.sh` downloads the GIAB data, references,
+  truth sets and annotations (about 500 GB per build). The gene-panel BEDs
+  (`data/Paediatric_disorders.HG002_SVs_Tier1.GRCh3{7,8}.bed`, 3,886 genes,
+  intersected with HCI) and the Illumina WES capture targets
+  (`data/agilent_sureselect_human_all_exon_v5_b37_targets.bed`, Agilent SureSelect
+  Human All Exon V5) ship with the repository; the preparation scripts copy them
+  into the reference directory.
 
 ## Quick Start
 
@@ -131,6 +150,9 @@ At least one BAM file must be provided.
 |-----------|---------|-------------|
 | `skip_benchmarking` | `false` | Skip Truvari benchmarking |
 | `skip_pbsv` | `false` | Skip Pbsv caller for PacBio data |
+| `skip_delly` | `false` | Skip Delly on Illumina WGS and WES |
+| `delly_exclude` | `null` | Delly exclude template (downloaded by the preparation scripts) |
+| `sensitivity_benchmarks` | `false` | Re-score the real targets under alternative settings (`sensitivity_*` parameters) |
 | `simulate_targets` | `false` | Enable simulated interval analysis |
 | `num_simulations` | `100` | Number of simulated interval sets to generate |
 | `gather_statistics` | `false` | Generate publication plots and statistics tables |
@@ -143,11 +165,19 @@ Default parameters for SV comparison. Separate `truvari_wes_*` parameters allow 
 | Parameter | Default | WES Default | Description |
 |-----------|---------|-------------|-------------|
 | `truvari_refdist` | 500 | 500 | Max reference distance (bp) |
-| `truvari_pctsize` | 0.7 | 0.7 | Min size similarity (0-1) |
+| `truvari_pctsize` | 0.7 | 0.7 (generated params files: 0) | Min size similarity (0-1) |
 | `truvari_pctseq` | 0.0 | 0.0 | Min sequence similarity (0-1) |
 | `truvari_pctovl` | 0.0 | 0.0 | Min reciprocal overlap (0-1) |
 
-All Truvari runs include `--bench-overlaps 1 --passonly --dup-to-ins` flags. The pipeline uses a [modified Truvari](https://github.com/CISLD/truvari) that allows partial overlap with target intervals. The value of `--bench-overlaps` is the minimum number of positions a call must share with a target interval; `1` is the one-base intersection the published results use, and `0` restores stock containment.
+All Truvari runs include `--bench-overlaps 1 --bnddist -1 --passonly --dup-to-ins`, and keep
+Truvari's size defaults: truth records must be at least `--sizemin` 50 bp, candidates at least
+`--sizefilt` 30 bp, and both at most `--sizemax` 50 kb. A candidate of 30-49 bp may match a truth
+record but is dropped, not counted as a false positive, when it does not. `--refdist` is satisfied
+when the candidate's span lies within that distance of the truth span; `--pctseq` is applied only
+when both records are sequence-resolved. Inversions are not converted and are scored as their own
+type. Every benchmark directory keeps its full configuration in `<prefix>/params.json`.
+
+Before any benchmark, calls genotyped homozygous reference (`0/0`, `0|0`, haploid `0`) are removed (`exclude_homref_calls`, default `true`): the caller is stating that the sample does not carry them, and the truth sets count only records that carry an ALT allele. Calls without a genotype (`./.`, all cuteSV calls) are kept, which is why Truvari's own `--no-ref` is not used. A caller with no such call is benchmarked on its original VCF. The scored VCFs and the per-caller counts are in `benchmarked_calls/`. `--exclude_homref_calls false` scores them like any other call. The pipeline uses a [modified Truvari](https://github.com/CISLD/truvari) that allows partial overlap with target intervals. The value of `--bench-overlaps` is the minimum number of positions a call must share with a target interval; `1` is the one-base intersection the published results use, and `0` restores stock containment.
 
 ### Resource Limits
 
@@ -161,9 +191,11 @@ All Truvari runs include `--bench-overlaps 1 --passonly --dup-to-ins` flags. The
 
 ```
 {outdir}/
+├── benchmarked_calls/               # VCFs as scored (0/0 calls removed) and the removal counts
 ├── sv_calls/                        # SV caller output VCFs
 │   ├── Illumina_WES/Manta/
 │   ├── Illumina_WGS/Manta/
+│   ├── Illumina_WGS/Delly/
 │   ├── PacBio/
 │   │   ├── CuteSV/
 │   │   └── PBSV/
@@ -172,6 +204,9 @@ All Truvari runs include `--bench-overlaps 1 --passonly --dup-to-ins` flags. The
 │       └── Sniffles/
 ├── real_intervals/                  # Truvari benchmarks on real target sets
 │   └── {technology}-{caller}-{target}/
+├── sensitivity/                     # Sensitivity benchmarks (if enabled)
+│   ├── {setting}/{technology}/{caller}/{target}/   # refdist*, pctsize*, pctseq*, containment, extend*, pad*
+│   └── target_beds/                 # Padded boundary-target BEDs
 ├── simulations/                     # Simulated interval analysis (if enabled)
 │   ├── simulated_targets/           # Generated BED files
 │   └── benchmarks/                  # Truvari results per simulation
@@ -232,9 +267,8 @@ The default comparison is `high_confidence` versus `wes_utr`, labelled
 `--transition_hci_target`, `--transition_target`, and
 `--transition_target_label`.
 
-Nextflow itself runs on the host. On the KISLD HPC installation used for the
-paper, load it with `module load anaconda` followed by `conda activate nf-core`.
-Callers, Truvari, and the combined Python/R analysis environment remain separate
+Nextflow (25.04 or later) runs on the host and must be on `PATH`; how it gets
+there is up to the installation. Callers, Truvari, and the combined Python/R analysis environment remain separate
 process containers; the workflow is not launched from inside a container.
 
 > **Container engine.** The two custom images are published to a Singularity
@@ -243,34 +277,101 @@ process containers; the workflow is not launched from inside a container.
 > `charliecloud` profiles can run SV calling, whose images all come from
 > `quay.io`, but not the Truvari or analysis stages.
 
-### Running the drivers elsewhere
+### Running the study
 
-The scripts in `bin/` contain no absolute paths. Everything site-specific is an
-environment variable, so they run unmodified on any machine:
+One command runs every analysis of the study for one assembly: SV calling
+(including Delly), benchmarking on HCI, GP and EX+UTR, the 500 simulated interval
+sets, statistics and plots, target-transition evidence, the sensitivity
+benchmarks and the post-hoc analyses. The `study` profile sets those options;
+each one remains an ordinary parameter that can be switched off.
+
+```bash
+bash preparation/generate_params.sh --genome GRCh38 --datadir /path/to/GRCh38/data \
+    --outfile params_GRCh38.yaml
+nextflow run . -params-file params_GRCh38.yaml -profile singularity,study \
+    --reference_assembly GRCh38 --outdir results-GRCh38
+```
+
+The post-hoc analyses (`--posthoc_analyses`, on in `study`) run as pipeline
+tasks after the benchmarks and publish under `<outdir>/posthoc/`:
+
+- every benchmark's metrics and Truvari parameters in one table, optionally
+  compared row by row with another run (`--posthoc_compare_results <dir>`);
+- SV-type accounting from the scored VCF to the HCI benchmark;
+- the recall and precision decomposition (composition versus label transitions)
+  with the candidate-side audit of false positives, per pipeline;
+- post-matching stratification, checked against the composition-only values;
+- block-bootstrap intervals and rarefied percentile ranks;
+- transition audits across the threshold grid and recovery under `--extend` and
+  padding;
+- composition standardisation of the simulated metrics;
+- simulation fidelity (GIAB v3.3 stratifications by default;
+  `--posthoc_segdups` and `--posthoc_lowmappability` override them);
+- precision with and without candidate inversions;
+- truth records admitted by containment and by any overlap, counted directly in
+  every simulated set and by independent VCF-BED intersection (`membership/`;
+  needs the containment benchmarks of `--sensitivity_benchmarks`);
+- the real-target benchmarks repeated with SVanalyzer as a second comparator
+  (`svanalyzer/`; bioconda image, `--svanalyzer_container` overrides it);
+- every value the manuscript and its supplementary tables report
+  (`manuscript/<assembly>.manuscript_numbers.md`, and one TSV per supplementary
+  table in `manuscript/supplementary_tables/`, with the rounding they are printed
+  with).
+
+They need a truth set and `--simulate_targets true`; with the sensitivity
+benchmarks they also need `--generate_transition_evidence true`. The manuscript
+values also read the statistics tables (`--gather_statistics`) and the
+transition evidence; sections whose inputs were not produced are skipped.
+
+`bin/run_svanalyzer_posthoc.sh <run_root> <assembly>` runs the same SVanalyzer
+check on a finished run made without it (`SVANALYZER_SIF` set to a local image).
+
+GRCh38 BAMs are prepared with `preparation/build_grch38_analysis_bams.sh`, which
+restricts them to the contigs of the analysis reference and filters nothing
+else: discordant pairs, supplementary alignments and reads with an unmapped mate
+all stay. A second stage (`strip_absent_sa_entries.py`) removes the SA-tag
+entries that still point at a dropped contig, which pbsv otherwise aborts on; it
+keeps every record. A BAM whose header already matches the reference (ONT) is
+used as distributed. The `*.analysis_contigs.sa_filtered.bam` files in
+`data/analysis_bams/` are the pipeline inputs.
+
+### Run driver
+
+`bin/run_benchmark.sh <label> <assembly> [nextflow arguments ...]` wraps the
+command above for dated, provenance-recorded runs. Each assembly runs from its
+own directory under `$SV_DATA_ROOT/<label>/`; the driver refuses to write into
+existing results unless `SV_RESUME=1`, and records the params file, the
+execution config, the image checksums and a hash of the pipeline files, so a
+run can be matched to a commit even where the execution host has no git. Extra
+arguments go to Nextflow unchanged.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `SV_DATA_ROOT` | *required* | Directory holding the prepared per-assembly data |
-| `SV_PROFILE` | `singularity` | Nextflow profile to run with |
-| `SV_HPC_CONFIG` | unset | Extra Nextflow config for a local cluster |
+| `SV_PARAMS_FILE` | `$SV_DATA_ROOT/<assembly>/params_<assembly>.yaml` | Params file |
+| `SV_PROFILE` | `singularity,study` | Nextflow profile(s) |
+| `SV_HPC_CONFIG` | unset | Extra Nextflow config for the execution environment (executor, queue, container cache) |
 | `SV_ENV_MODULE` | unset | Environment module to load before running |
 | `SV_CONDA_ENV` | unset | Conda environment to activate before running |
 | `TRUVARI_SIF` | published image | Local `.sif` or registry URI overriding the Truvari container |
 | `ANALYSIS_SIF` | published image | Local `.sif` overriding the analysis container |
-| `SV_IMAGE_CACHE` | inside the output directory | Where pulled images are cached |
+| `SV_RESUME` | unset | `1` resumes the run instead of refusing |
 
 Leaving `TRUVARI_SIF` and `ANALYSIS_SIF` unset is the reproducible choice: the
 pipeline then uses the published, immutable tags in `nextflow.config`. Setting
 either one is recorded in the run manifest along with its checksum.
 
-To reproduce the published runs on the machine that produced them:
-
 ```bash
 export SV_DATA_ROOT=/path/to/prepared/data
-export SV_ENV_MODULE=anaconda SV_CONDA_ENV=nf-core SV_PROFILE=cpu
-export SV_HPC_CONFIG=/home/Software/configs/nextflow_local/configs/conf/kisld_hpc.config
-bin/run_clean_dated_benchmark.sh 2026-08-03
+export SV_HPC_CONFIG=/path/to/your/site.config   # optional
+for asm in GRCh37 GRCh38; do
+    bin/run_benchmark.sh "$(date +%F)" "$asm"
+done
 ```
+
+The driver assumes no scheduler. To run it as a batch job, submit it with your
+scheduler's own command; launchers specific to one site belong in the
+git-ignored `local/` directory, not in the repository.
 
 ## Repository Structure
 
@@ -338,6 +439,7 @@ If you use this pipeline, please cite:
 
 - **Truvari**: English, A.C., et al. (2022). Truvari: refined structural variant comparison preserves allelic diversity. *Genome Biology*, 23, 271.
 - **Nextflow**: Di Tommaso, P., et al. (2017). Nextflow enables reproducible computational workflows. *Nature Biotechnology*, 35, 316-319.
+- **Delly**: Rausch, T., et al. (2012). DELLY: structural variant discovery by integrated paired-end and split-read analysis. *Bioinformatics*, 28, i333-i339.
 - **Manta**: Chen, X., et al. (2016). Manta: rapid detection of structural variants and indels for germline and cancer sequencing applications. *Bioinformatics*, 32, 1220-1222.
 - **CuteSV**: Jiang, T., et al. (2020). Long-read-based human genomic structural variation detection with cuteSV. *Genome Biology*, 21, 189.
 - **Pbsv**: Pacific Biosciences. https://github.com/PacificBiosciences/pbsv

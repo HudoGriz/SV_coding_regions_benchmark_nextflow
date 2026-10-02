@@ -41,4 +41,10 @@ process GATHER_STATISTICS {
     
     echo "Analysis complete"
     """
+
+    stub:
+    """
+    mkdir -p plots tables
+    touch tables/summary.tsv
+    """
 }

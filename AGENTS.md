@@ -20,26 +20,26 @@ conf/
 workflows/                 # Sub-workflows (SCREAMING_SNAKE_CASE names)
 modules/
   local/                   # Custom process definitions (simulate_targets, gather_statistics,
-                           #   truvari_refine, target_transition_evidence)
+                           #   truvari_refine, target_transition_evidence, pad_target_bed)
   nf-core/                 # Pinned nf-core modules (do NOT edit directly)
 lib/WorkflowHelp.groovy    # Groovy helper class
 bin/R/                     # R scripts (simulate_targets.R, paper_plots.R, functions.R)
-bin/python/                # Analysis scripts shipped in the analysis container
-bin/*.sh                   # Container build and evidence-regeneration drivers
+bin/python/                # Analysis scripts; run from the repo inside the analysis (or Truvari) image
+bin/*.sh                   # Container build, evidence-regeneration and revision-run drivers
 containers/
   Singularity.python-r-analysis  # Combined Python/R analysis image definition
+  Singularity.svanalyzer         # SVanalyzer + edlib-aligner, post-hoc comparator check only
 preparation/               # Shell scripts for data download/prep
 ```
 
 ## Build / Run / Test Commands
 
 ```bash
-# Nextflow has to be on PATH. On this HPC host that means:
-module load anaconda
-conda activate nf-core
-# The bin/ drivers do this for you when SV_ENV_MODULE and SV_CONDA_ENV are set,
-# and skip it anywhere Nextflow is already installed. See the environment table
-# in README.md; no driver hardcodes a path to this machine.
+# Nextflow (>= 25.04) has to be on PATH. The bin/ drivers can load it for you
+# when SV_ENV_MODULE and/or SV_CONDA_ENV are set, and skip that step anywhere
+# Nextflow is already installed. See the environment table in README.md. Nothing
+# in the repository may hardcode a path, scheduler, partition or CPU count of one
+# machine; site-specific launchers go in the git-ignored local/ directory.
 
 # Quick validation / syntax check (the CI lint step, no containers needed)
 nextflow run . -profile test_nfcore --help
@@ -209,8 +209,42 @@ Override behavior in `conf/modules.config` via `withName:` blocks.
   `container = { params.analysis_container }` closures resolve without undefined-parameter warnings.
 - Per-process container overrides in `conf/modules.config`.
 
+## Analyses beyond the primary benchmark
+
+- Delly 1.7.3 (nf-core `delly/call`, biocontainer) runs on Illumina WGS next to
+  Manta, with Delly's exclude template (`delly_exclude`). WES stays Manta-only.
+- `SENSITIVITY_BENCHMARKS` (`--sensitivity_benchmarks`) re-scores the real
+  targets under one changed setting at a time (thresholds, containment,
+  `--extend`, padding) and publishes under `sensitivity/<setting>/`. It uses the
+  same `TRUVARI_BENCH` module; `meta.bench_overlaps` selects containment, and
+  when it is unset the primary command line is unchanged.
+- The transition-evidence and padding processes run `python3 ${projectDir}/bin/python/*.py`
+  inside the analysis image, like the R scripts. Scripts can change without a
+  new image, and a run's code is the commit, not whatever was baked into the image.
+- `POSTHOC_ANALYSES` (`--posthoc_analyses`) runs the post-hoc scripts in
+  `bin/python/` as pipeline tasks. The scripts read the published results layout,
+  so each task rebuilds the part it needs from staged files and a manifest
+  (`modules/local/posthoc_analyses.nf`); `bench_dir()` in
+  `workflows/posthoc_analyses.nf` must mirror the `TRUVARI_BENCH` publishDir in
+  `conf/modules.config`.
+- The `study` profile (`conf/study.config`) turns on every analysis of the study.
+- Driver: `bin/run_benchmark.sh <label> <assembly> [nextflow args]` (refuses to
+  overwrite; `SV_RESUME=1` to resume; no scheduler assumed). The SVanalyzer check
+  `bin/run_svanalyzer_posthoc.sh` stays outside the pipeline by design.
+- GRCh38 BAMs: `preparation/build_grch38_analysis_bams.sh` restricts to the
+  analysis contigs, then removes SA entries naming the dropped contigs; no flag
+  or MAPQ filters. The pipeline reads the `*.sa_filtered.bam` outputs.
+- Nextflow hashes any `bin/` entry whose name appears as a word in a task script. The Manta module runs
+  `python manta/runWorkflow.py`, which matches the `bin/python/` directory, so adding or removing a file
+  there invalidates Manta's cache (and every Manta benchmark) on the next `-resume`. Do not add or remove
+  files in `bin/python/` while a run that may be resumed is in flight.
+- The drivers record a hash of the pipeline files as well as the git commit,
+  because the execution host may have no git; match the hash to a commit later.
+
 ## Key Parameters
 
 Defined in `nextflow.config` with defaults, documented in `nextflow_schema.json`.
-Boolean flags: `skip_benchmarking`, `skip_pbsv`, `simulate_targets`, `gather_statistics`.
+Boolean flags: `skip_benchmarking`, `skip_pbsv`, `skip_delly`, `simulate_targets`, `gather_statistics`,
+`generate_transition_evidence`, `sensitivity_benchmarks`, `exclude_homref_calls` (default true: calls
+genotyped 0/0 are dropped before benchmarking; `./.` calls are kept).
 Use `null` as default for optional file paths.

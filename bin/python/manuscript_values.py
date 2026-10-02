@@ -511,6 +511,12 @@ def report_transitions(d, out):
             f"median {statistics.median(dist):g}, p90 {quantile(dist, 0.9):.0f}, <=100 bp {sum(x <= 100 for x in dist)}, "
             f"<=500 bp {sum(x <= 500 for x in dist)}, of {len(dist)}")
     out(f"- losses without Delly: {sum(r['pipeline'] != 'Illumina_WGS Delly' for r in losses)}")
+    # A truth record lost by several pipelines counts once per pipeline above.
+    identity = ("truth_chrom", "truth_pos", "truth_id", "truth_allele_digest", "truth_genotype")
+    per_record = Counter(tuple(r[k] for k in identity) for r in losses)
+    if per_record:
+        out(f"- distinct truth records among the {len(losses)} losses: {len(per_record)} "
+            f"(lost by up to {max(per_record.values())} pipelines)")
 
     out.section("Simulation audit")
     mech_file = d.path("target_transition_evidence", "simulations", "tables", "simulation_transition_evidence.mechanisms.tsv")

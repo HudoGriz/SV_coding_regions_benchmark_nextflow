@@ -6,11 +6,13 @@ single estimate with no interval, and each simulated set scores roughly twice
 as many truth variants as the real target, so the simulated distribution is
 narrower than the observed value's own sampling spread.
 
-1. Block bootstrap of the observed target. Records are grouped by the merged
-   target component they overlap, because SVs in the same gene are not
-   independent. Components (with every truth and candidate record in them) are
-   resampled with replacement; precision, recall and F1 are recomputed each
-   time. Reports the 2.5 and 97.5 percentiles.
+1. Block bootstrap of the observed target. Each record is assigned to the
+   first merged target interval (component) it overlaps, so records in the same
+   interval are resampled together. Neighbouring exons of a gene remain separate
+   components, so dependence between them is not modelled. Components (with
+   every truth and candidate record in them) are resampled with replacement;
+   precision, recall and F1 are recomputed each time. Reports the 2.5 and 97.5
+   percentiles.
 
 2. Rarefied simulated sets. Each simulated set is subsampled, by whole
    components in a random order, until it holds at least as many truth records

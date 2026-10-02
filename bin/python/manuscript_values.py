@@ -309,6 +309,21 @@ def report_reference(d, out):
     for m in METRICS:
         out(f"- mean |sim median - EX+UTR| {m}: {100 * statistics.mean(absdiff[m]):.2f} pp")
 
+    out.section("EX+UTR bootstrap interval against the simulated 5th-95th percentile range (Figure 4)")
+    sim_rows = d.metrics[("primary", "simulated")]
+    overlapping = []
+    for pipe in pipes:
+        unc = {r["metric"]: r for r in d.decomposition(pipe, "uncertainty")}
+        for m in METRICS:
+            v = [float(r[m]) for (p, _t), r in sim_rows.items() if p == pipe]
+            p5, p95 = quantile(v, 0.05), quantile(v, 0.95)
+            low, high = float(unc[m]["bootstrap_ci_low"]), float(unc[m]["bootstrap_ci_high"])
+            hit = low <= p95 and high >= p5
+            overlapping.append(hit)
+            out(f"- {LABEL[pipe]} {m}: interval [{f3(low)}, {f3(high)}], simulated 5th-95th [{f3(p5)}, {f3(p95)}]"
+                f"{' overlaps' if hit else ''}")
+    out(f"- intervals overlapping the simulated 5th-95th range: {sum(overlapping)} of {len(overlapping)}")
+
 
 def report_uncertainty(d, out):
     out.section("Bootstrap CI and rarefied ranks (bootstrap_metrics.py)")
@@ -528,6 +543,20 @@ def report_sensitivity(d, out):
             f"restored {r['truth_restored_tp']}, same candidate {r['restored_with_same_candidate']}")
     for s, (lost, restored, same) in sorted(d.recovery().items()):
         out(f"- TOTAL {s}: restored {restored} of {lost} (same candidate {same})")
+    if d.has("target_transition_evidence", "tables", "target_transition_evidence.transitions.tsv"):
+        dist = [float(r["candidate_nearest_edge_distance"]) for r in d.real_transitions()
+                if r["direction"] == "HCI_TP_to_target_FN"]
+        rec = d.recovery()
+        gaps = []
+        for x in (20, 50, 100, 200, 300, 500):
+            within = sum(v <= x for v in dist)
+            cells = [f"padding {rec[f'pad{x}'][1]}"]
+            gaps.append(abs(rec[f"pad{x}"][1] - within))
+            if f"extend{x}" in rec:
+                cells.append(f"--extend {rec[f'extend{x}'][1]}")
+                gaps.append(abs(rec[f"extend{x}"][1] - within))
+            out(f"- {x} bp: removed candidate within {x} bp of the edge {within}; restored by " + ", ".join(cells))
+        out(f"- largest difference between restored and within-distance counts (Figure 8A-B): {max(gaps)} records")
     pipes = d.pipes()
     out.section("Padding and extension: aggregate metrics (EX+UTR)")
     for s in [k for k in d.settings() if k.startswith(("pad", "extend"))]:
@@ -535,6 +564,12 @@ def report_sensitivity(d, out):
             r = d.setting(s).get((pipe, "wes_utr"))
             if r:
                 out(f"- {s} {LABEL[pipe]}: truth {r['truth_denominator']}, {f3(r['precision'])}/{f3(r['recall'])}/{f3(r['f1'])}")
+    changes = [(abs(float(d.setting(f"pad{x}")[(p, "wes_utr")]["f1"]) - float(d.prim[(p, "wes_utr")]["f1"])), p, x)
+               for x in (20, 50, 100) for p in LONG if (p, "wes_utr") in d.setting(f"pad{x}")]
+    if changes:
+        g, p, x = max(changes)
+        out(f"- long-read EX+UTR F1, padding of 20-100 bp against none: largest change {100 * g:.2f} pp "
+            f"({LABEL[p]}, {x} bp)")
     out.section("Threshold grid: EX+UTR transitions per setting")
     grid = defaultdict(Counter)
     for r in rows(d.post / "sensitivity" / f"{d.asm}.threshold_mechanisms.tsv"):
